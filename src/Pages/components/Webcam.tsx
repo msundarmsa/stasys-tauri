@@ -1,5 +1,9 @@
 import { Menu, MenuItem, Box, Button, Stack, Typography, Slider } from "@mui/material";
 import { useState, useRef, useEffect } from "react";
+import { invoke } from '@tauri-apps/api/tauri';
+import { listen, UnlistenFn } from '@tauri-apps/api/event';
+
+var unlistenGrabFrames: UnlistenFn | null = null;
 
 const Webcam = ({ setCameraId, setCameraThreshs, cameraThreshs, webcams }: IProps) => {
   // menu
@@ -18,14 +22,45 @@ const Webcam = ({ setCameraId, setCameraThreshs, cameraThreshs, webcams }: IProp
     setAnchorEl(null);
   };
 
+  async function grabFrames() {
+    unlistenGrabFrames = await listen('grab_frame', (event) => {
+      if (canvasRef.current === null) {
+        return;
+      }
+      let canvas = canvasRef.current;
+
+      let ctx = canvasRef.current.getContext('2d');
+      if (ctx === null) {
+        return;
+      }
+
+      let imageArr = Uint8ClampedArray.from(
+        atob(event.payload as string),
+        (c) => c.charCodeAt(0)
+      );
+      let myImageData = new ImageData(imageArr, imageArr.length / (4 * canvas.height));
+      ctx.putImageData(myImageData, 0, 0);
+    });
+  }
+
   useEffect(() => {
+    grabFrames();
+
     // stop webcam when element is destroyed
-    return () => stopWebcam();
+    return () => {
+      stopWebcam();
+
+      // stop listening to grab frames
+      if (unlistenGrabFrames !== null) {
+        unlistenGrabFrames();
+        unlistenGrabFrames = null;
+      }
+    };
   }, []);
 
   const stopWebcam = () => {
     // send stop signal to tauri backend
-    /** @todo: call tauri command */
+    invoke('settings_close_camera');
     setWebcamStarted(false);
     setDeviceLabel("");
   };
@@ -44,7 +79,14 @@ const Webcam = ({ setCameraId, setCameraThreshs, cameraThreshs, webcams }: IProp
     closeWebcams();
 
     // send start signal to tauri backend
-    /** @todo: call tauri command */
+    if (canvasRef.current !== null) {
+      let args = {
+        label: device.label,
+        width: canvasRef.current.width,
+        height: canvasRef.current.width,
+      };
+      invoke('settings_choose_camera', args);
+    }
   }
 
   const cameraThreshsChanged = (newCameraThreshs: number[]) => {
@@ -130,8 +172,8 @@ const Webcam = ({ setCameraId, setCameraThreshs, cameraThreshs, webcams }: IProp
         <canvas
           ref={canvasRef}
           style={{
-            width: "100%",
-            aspectRatio: "1280/720",
+            width: "100%", 
+            aspectRatio: "1280/720"
           }}
         />
       </Box>

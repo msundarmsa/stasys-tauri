@@ -80,7 +80,7 @@ export default function MainPage() {
     // choose webcam with name "USB" if user has not selected video
     for (let i = 0; i < webcams.length; i++) {
       if (webcams[i].label.includes("USB") && !user_chose_video) {
-        setCameraId(webcams[i].deviceId);
+        setCameraId(webcams[i].label);
         usbVideoExists = true;
       }
     }
@@ -88,7 +88,7 @@ export default function MainPage() {
     // choose mic with name "USB" if user has not selected audio
     for (let i = 0; i < mics.length; i++) {
       if (mics[i].label.includes("USB") && !user_chose_audio) {
-        setMicId(mics[i].deviceId);
+        setMicId(mics[i].label);
         usbAudioExists = true;
       }
     }
@@ -107,8 +107,8 @@ export default function MainPage() {
       (!user_chose_video && !usbVideoExists) ||
       (!user_chose_audio && !usbAudioExists)
     ) {
-      setCameraId(webcams[0].deviceId);
-      setMicId(mics[0].deviceId);
+      setCameraId(webcams[0].label);
+      setMicId(mics[0].label);
       showToast(
         "info",
         "Could not find USB camera/mic. Chosen first available camera/mic. If you would like to change this please go to settings dialog and manually select the camera and microphone."
