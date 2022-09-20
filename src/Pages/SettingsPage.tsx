@@ -1,5 +1,6 @@
 import { Typography, Box, Button } from "@mui/material";
 import Webcam from "./components/Webcam";
+import Mic from "./components/Mic";
 
 const SettingsPage = ({
   setCameraId,
@@ -26,7 +27,7 @@ const SettingsPage = ({
         }}
       >
         <Box sx={{ width: "50%", p: 1 }}>
-          {/* <Mic setMicId={setMicId} setMicThresh={setMicThresh} micThresh={micThresh} mics={mics} /> */}
+          <Mic setMicId={setMicId} setMicThresh={setMicThresh} micThresh={micThresh} mics={mics} />
         </Box>
         <Box sx={{ width: "50%", p: 1 }}>
           <Webcam setCameraId={setCameraId} setCameraThreshs={setCameraThreshs} cameraThreshs={cameraThreshs} webcams={webcams} /> 

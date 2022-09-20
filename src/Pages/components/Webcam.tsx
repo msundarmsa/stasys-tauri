@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import { invoke } from '@tauri-apps/api/tauri';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 
-var unlistenGrabFrames: UnlistenFn | null = null;
+var unlisten: UnlistenFn | null = null;
 
 const Webcam = ({ setCameraId, setCameraThreshs, cameraThreshs, webcams }: IProps) => {
   // menu
@@ -23,7 +23,7 @@ const Webcam = ({ setCameraId, setCameraThreshs, cameraThreshs, webcams }: IProp
   };
 
   async function grabFrames() {
-    unlistenGrabFrames = await listen('grab_frame', (event) => {
+    unlisten = await listen('grab_camera_frame', (event) => {
       if (canvasRef.current === null) {
         return;
       }
@@ -51,9 +51,9 @@ const Webcam = ({ setCameraId, setCameraThreshs, cameraThreshs, webcams }: IProp
       stopWebcam();
 
       // stop listening to grab frames
-      if (unlistenGrabFrames !== null) {
-        unlistenGrabFrames();
-        unlistenGrabFrames = null;
+      if (unlisten !== null) {
+        unlisten();
+        unlisten = null;
       }
     };
   }, []);
@@ -75,7 +75,6 @@ const Webcam = ({ setCameraId, setCameraThreshs, cameraThreshs, webcams }: IProp
     setCameraId(device.label);
     setDeviceLabel(device.label);
     setWebcamStarted(true);
-
     closeWebcams();
 
     // send start signal to tauri backend

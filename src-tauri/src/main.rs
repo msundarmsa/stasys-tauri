@@ -16,16 +16,19 @@ use base64::encode;
 
 mod thread;
 mod camera;
+mod mic;
 use thread::Thread;
 use camera::camera_stream;
+use mic::mic_stream;
 
 struct ManagedAppState(Mutex<AppState>);
 #[derive(Default)]
 struct AppState {
-    camera_thread: Option<Thread<()>>
+    camera_thread: Option<Thread<()>>,
+    mic_thread: Option<Thread<()>>
 }
 
-fn grab_frame_thread(
+fn grab_camera_frames(
     label: String,
     width: u32,
     height: u32,
@@ -34,7 +37,7 @@ fn grab_frame_thread(
 ) {
     let grab_frame = |rgb_frame: Video, window: &Window| {
         window
-            .emit("grab_frame", encode(rgb_frame.data(0)))
+            .emit("grab_camera_frame", encode(rgb_frame.data(0)))
             .unwrap(); 
     };
 
@@ -61,8 +64,8 @@ fn settings_choose_camera(
 
     // start thread to grab camera
     let (tx, rx) = channel();
-    let handle = spawn(move || grab_frame_thread(label, width, height, window, rx));
-    let name = "grab_frame_thread".to_string();
+    let handle = spawn(move || grab_camera_frames(label, width, height, window, rx));
+    let name = "grab_camera_frame".to_string();
     curr_state.camera_thread = Some(Thread{name, handle, tx});
 
     // remove lock
@@ -82,6 +85,59 @@ fn settings_close_camera(state: State<ManagedAppState>) {
     drop(curr_state);
 }
 
+fn grab_mic_frames(
+    label: String,
+    window: Window,
+    rx: Receiver<()>
+) {
+    let grab_frame = |volume: f64, window: &Window| {
+        window
+            .emit("grab_mic_frame", volume)
+            .unwrap();
+    };
+
+    match mic_stream(label, window, rx, grab_frame) {
+        Ok(()) => (),
+        Err(e) => {
+            error!("Could not read frames from mic ({:})", e.to_string());
+            // emit toast error event with error "Could not read frames from camera"
+            ()
+        }
+    }
+}
+
+#[tauri::command]
+fn settings_choose_mic(
+    label: String,
+    window: Window,
+    state: State<ManagedAppState>,
+) {
+    // lock mutex to get value
+    let mut curr_state = state.0.lock().unwrap();
+
+    // start thread to grab camera
+    let (tx, rx) = channel();
+    let handle = spawn(move || grab_mic_frames(label, window, rx));
+    let name = "grab_frame_thread".to_string();
+    curr_state.mic_thread = Some(Thread{name, handle, tx});
+
+    // remove lock
+    drop(curr_state);
+}
+
+#[tauri::command]
+fn settings_close_mic(state: State<ManagedAppState>) {
+    // lock mutex to get value
+    let mut curr_state = state.0.lock().unwrap();
+    
+    if curr_state.mic_thread.is_some() {
+        curr_state.mic_thread.take().unwrap().terminate();
+    }
+
+    // remove lock
+    drop(curr_state);
+}
+
 fn main() {
     env_logger::Builder::from_env(Env::default().default_filter_or("debug")).init();
     ffmpeg::init().unwrap();
@@ -90,7 +146,7 @@ fn main() {
 
     tauri::Builder::default()
         .manage(ManagedAppState(Default::default()))
-        .invoke_handler(tauri::generate_handler![settings_choose_camera, settings_close_camera])
+        .invoke_handler(tauri::generate_handler![settings_choose_camera, settings_close_camera, settings_choose_mic, settings_close_mic])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
