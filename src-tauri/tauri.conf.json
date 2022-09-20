@@ -55,10 +55,10 @@
     "windows": [
       {
         "fullscreen": false,
-        "height": 600,
+        "height": 1080,
         "resizable": true,
         "title": "stasys-tauri",
-        "width": 800
+        "width": 1920
       }
     ]
   }

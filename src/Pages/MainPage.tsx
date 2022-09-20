@@ -1,13 +1,25 @@
-import { AppBar, Box, Button, IconButton, Modal, Toolbar, Typography } from "@mui/material";
+import { Alert, AlertColor, AppBar, Box, Button, IconButton, Modal, Snackbar, Toolbar, Typography } from "@mui/material";
 import SettingsIcon from "@mui/icons-material/Settings";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import SettingsPage from "./SettingsPage";
 
 export default function MainPage() {
   // settings modal
   const [settingsPageOpen, setSettingsPageOpen] = useState(false);
   const handleSettingsPageOpen = () => setSettingsPageOpen(true);
   const handleSettingsPageClose = () => setSettingsPageOpen(false);
-  
+
+  // toasts
+  const [toastOpen, setToastOpen] = useState(false);
+  const handleToastOpen = () => setToastOpen(true);
+  const handleToastClose = () => setToastOpen(false);
+  const [toastMsg, setToastMsg] = useState("");
+  const [toastSeverity, setToastSeverity] = useState<AlertColor>("info");
+  const showToast = (severity: AlertColor, msg: string) => {
+    setToastMsg(msg);
+    setToastSeverity(severity);
+    handleToastOpen();
+  };
 
   // user options
   const [webcams, setWebcams] = useState<MediaDeviceInfo[]>([]);
@@ -15,22 +27,97 @@ export default function MainPage() {
   const [cameraId, setCameraId] = useState("");
   const [micId, setMicId] = useState("");
   const [micThresh, setMicThresh] = useState(0.2);
+  const [cameraThreshs, setCameraThreshs] = useState<number[]>([100, 150]);
 
   // buttons
   const [calibrateStarted, setCalibrateStarted] = useState(false);
   const [shootStarted, setShootStarted] = useState(false);
 
   const testClick = () => {
-    console.error("Test button not implemented");
+    showToast("error", "Test button not implemented");
   };
 
   const shootClick = () => {
-    console.error("Shoot button not implemented");
+    showToast("error", "Shoot button not implemented");
   };
 
   const calibrateClick = () => {
-    console.error("Calibrate button not implemented");
+    showToast("error", "Calibrate button not implemented");
   };
+
+  useEffect(() => {
+    chooseDefaultCameraAndMic();
+  }, []);
+
+  async function chooseDefaultCameraAndMic() {
+    // initiate permission
+    const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true,
+    });
+
+    // prevent devices from being read
+    stream.getTracks().forEach(function (track) {
+        track.stop();
+    });
+
+    const mydevices = await navigator.mediaDevices.enumerateDevices();
+
+    // get webcams
+    const webcams = mydevices.filter((device) => device.kind === "videoinput");
+
+    // get mics
+    const mics = mydevices.filter(
+      (device) =>
+        device.kind === "audioinput" && !device.label.startsWith("Default")
+    );
+
+    const user_chose_video = cameraId != "";
+    const user_chose_audio = micId != "";
+    let usbAudioExists = false;
+    let usbVideoExists = false;
+
+    // choose webcam with name "USB" if user has not selected video
+    for (let i = 0; i < webcams.length; i++) {
+      if (webcams[i].label.includes("USB") && !user_chose_video) {
+        setCameraId(webcams[i].deviceId);
+        usbVideoExists = true;
+      }
+    }
+
+    // choose mic with name "USB" if user has not selected audio
+    for (let i = 0; i < mics.length; i++) {
+      if (mics[i].label.includes("USB") && !user_chose_audio) {
+        setMicId(mics[i].deviceId);
+        usbAudioExists = true;
+      }
+    }
+
+    if (webcams.length == 0) {
+      showToast("error", "No webcams found!");
+      return;
+    }
+
+    if (mics.length == 0) {
+      showToast("error", "No mics found!");
+      return;
+    }
+
+    if (
+      (!user_chose_video && !usbVideoExists) ||
+      (!user_chose_audio && !usbAudioExists)
+    ) {
+      setCameraId(webcams[0].deviceId);
+      setMicId(mics[0].deviceId);
+      showToast(
+        "info",
+        "Could not find USB camera/mic. Chosen first available camera/mic. If you would like to change this please go to settings dialog and manually select the camera and microphone."
+      );
+    }
+
+    setWebcams(webcams);
+    setMics(mics);
+  }
   
   return (
     <div
@@ -80,15 +167,17 @@ export default function MainPage() {
               boxShadow: 24,
               p: 4,
             }}>
-              {/* <SettingsPage
+              <SettingsPage
                 setCameraId={setCameraId}
+                setCameraThreshs={setCameraThreshs}
+                cameraThreshs={cameraThreshs}
                 setMicId={setMicId}
                 setMicThresh={setMicThresh}
                 micThresh={micThresh}
                 webcams={webcams}
                 mics={mics}
                 handleClose={handleSettingsPageClose}
-              /> */}
+              />
             </Box>
           </Modal>
           <Button
@@ -108,6 +197,19 @@ export default function MainPage() {
           </Button>
         </Toolbar>
       </AppBar>
+      <Snackbar
+        open={toastOpen}
+        autoHideDuration={5000}
+        onClose={handleToastClose}
+      >
+        <Alert
+          onClose={handleToastClose}
+          severity={toastSeverity}
+          sx={{ width: "100%" }}
+        >
+          {toastMsg}
+        </Alert>
+      </Snackbar>
     </div>
   );
 }
