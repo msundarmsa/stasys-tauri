@@ -1,14 +1,15 @@
 import { Menu, MenuItem, Box, Button, Stack, Typography, Slider } from "@mui/material";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, ChangeEvent } from "react";
 import { invoke } from '@tauri-apps/api/tauri';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import { open } from '@tauri-apps/api/dialog';
 
 var unlisten: UnlistenFn | null = null;
 
 const Webcam = ({ setCameraId, setCameraThreshs, cameraThreshs, webcams }: IProps) => {
   // menu
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const open = Boolean(anchorEl);
+  const webcamsOpened = Boolean(anchorEl);
   const openWebcams = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
   };
@@ -65,22 +66,26 @@ const Webcam = ({ setCameraId, setCameraThreshs, cameraThreshs, webcams }: IProp
     setDeviceLabel("");
   };
 
-  async function selectWebcam(device: MediaDeviceInfo) {
+  async function selectWebcam(device_label: string, is_file: boolean) {
     if (webcamStarted) {
       // stop previous webcam if running before starting new one
       stopWebcam();
     }
 
     // update state
-    setCameraId(device.label);
-    setDeviceLabel(device.label);
+    setCameraId(device_label);
+    if (is_file) {
+      setDeviceLabel(device_label.split(/(\\|\/)/g).pop() as string);
+    } else {
+      setDeviceLabel(device_label);
+    }
     setWebcamStarted(true);
     closeWebcams();
 
     // send start signal to tauri backend
     if (canvasRef.current !== null) {
       let args = {
-        label: device.label,
+        label: device_label,
         width: canvasRef.current.width,
         height: canvasRef.current.width,
       };
@@ -107,13 +112,26 @@ const Webcam = ({ setCameraId, setCameraThreshs, cameraThreshs, webcams }: IProp
     setCameraThreshs(newCameraThreshs);
   };
 
+  const chooseFile = async () => {
+    const selected = await open({
+      multiple: false,
+      filters: [{
+        name: 'Video',
+        extensions: ['mp4', 'mkv']
+      }]
+    });
+    if (selected !== null) {
+      selectWebcam(selected as string, true);
+    }
+  }
+
   return (
     <div>
       <Menu
         id="webcams-menu"
         aria-labelledby="webcams-menu"
         anchorEl={anchorEl}
-        open={open}
+        open={webcamsOpened}
         onClose={closeWebcams}
         anchorOrigin={{
           vertical: "top",
@@ -125,10 +143,13 @@ const Webcam = ({ setCameraId, setCameraThreshs, cameraThreshs, webcams }: IProp
         }}
       >
         {webcams.map((device) => (
-          <MenuItem key={device.label} onClick={() => selectWebcam(device)}>
+          <MenuItem key={device.label} onClick={() => selectWebcam(device.label, false)}>
             {device.label}
           </MenuItem>
         ))}
+        <MenuItem key="Choose File" onClick={chooseFile}>
+          Choose File
+        </MenuItem>
       </Menu>
       <Box
         sx={{
@@ -141,9 +162,9 @@ const Webcam = ({ setCameraId, setCameraThreshs, cameraThreshs, webcams }: IProp
       >
         <Button
           id="webcams-menu-btn"
-          aria-controls={open ? "webcams-menu" : undefined}
+          aria-controls={webcamsOpened ? "webcams-menu" : undefined}
           aria-haspopup="true"
-          aria-expanded={open ? "true" : undefined}
+          aria-expanded={webcamsOpened ? "true" : undefined}
           onClick={openWebcams}
           variant="contained"
           sx={{ mr: 2 }}
