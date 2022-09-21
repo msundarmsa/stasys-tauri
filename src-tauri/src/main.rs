@@ -8,7 +8,8 @@ use ffmpeg::util::frame::video::Video;
 
 use env_logger::Env;
 use log::{info, error};
-use opencv::imgproc::cvt_color;
+use opencv::core::{Point, VecN};
+use opencv::imgproc::{cvt_color, circle, LINE_8, FILLED};
 use opencv::prelude::*;
 use tauri::{Window, State};
 use std::sync::Mutex;
@@ -38,8 +39,10 @@ fn grab_camera_frames(
     rx: Receiver<()>
 ) {
     let grab_frame = |mat: Mat, window: &Window| {
+        let mut matcircle = mat.clone();
         let mut output = mat.clone();
-        cvt_color(&mat, &mut output, opencv::imgproc::COLOR_RGB2RGBA, 0);
+        circle(&mut matcircle, Point{x: 150, y: 160}, 20, VecN([255.0, 0.0, 0.0, 0.0]), FILLED, LINE_8, 0);
+        cvt_color(&matcircle, &mut output, opencv::imgproc::COLOR_RGB2RGBA, 0);
         let data = match output.data_bytes() {
             Ok(res) => res,
             Err(error) => {
