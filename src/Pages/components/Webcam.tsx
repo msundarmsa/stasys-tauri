@@ -25,12 +25,12 @@ const Webcam = ({ setCameraId, setCameraThreshs, cameraThreshs, webcams }: IProp
 
   async function grabFrames() {
     unlisten = await listen('grab_camera_frame', (event) => {
-      if (canvasRef.current === null) {
+      let canvas = canvasRef.current;
+      if (canvas === null) {
         return;
       }
-      let canvas = canvasRef.current;
 
-      let ctx = canvasRef.current.getContext('2d');
+      let ctx = canvas.getContext('2d');
       if (ctx === null) {
         return;
       }
@@ -39,7 +39,8 @@ const Webcam = ({ setCameraId, setCameraThreshs, cameraThreshs, webcams }: IProp
         atob(event.payload as string),
         (c) => c.charCodeAt(0)
       );
-      let myImageData = new ImageData(imageArr, imageArr.length / (4 * canvas.height));
+      const { width, height } = canvas.getBoundingClientRect();
+      let myImageData = new ImageData(imageArr, width, height);
       ctx.putImageData(myImageData, 0, 0);
     });
   }
@@ -84,10 +85,11 @@ const Webcam = ({ setCameraId, setCameraThreshs, cameraThreshs, webcams }: IProp
 
     // send start signal to tauri backend
     if (canvasRef.current !== null) {
+      const { width, height } = canvasRef.current.getBoundingClientRect();
       let args = {
         label: device_label,
-        width: canvasRef.current.width,
-        height: canvasRef.current.width,
+        width: width,
+        height: height,
       };
       invoke('settings_choose_camera', args);
     }

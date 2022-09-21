@@ -70,8 +70,8 @@ fn get_camera_input(label: String) -> Result<Input, Error> {
     }
 }
 
-pub fn camera_stream(label: String, width: u32, height: u32, window: Window, rx: Receiver<()>, grab_frame: fn(Mat, &Window)) -> Result<(), Error> {
-    info!("Starting camera {:} ({:} x {:})", label, width, height);
+pub fn camera_stream<T>(label: String, rx: Receiver<()>, mut state: T, grab_frame: fn(Mat, &mut T)) -> Result<(), Error> {
+    info!("Starting camera {:}", label);
     
     let mut input = match get_camera_input(label) {
         Ok(input) => input,
@@ -95,20 +95,17 @@ pub fn camera_stream(label: String, width: u32, height: u32, window: Window, rx:
     let context_decoder = ffmpeg::codec::context::Context::from_parameters(stream.parameters())?;
     let mut decoder = context_decoder.decoder().video()?;
 
-    let new_width = if width != 0 { width } else { decoder.width() };
-    let new_height = if height != 0 { height } else { decoder.height() };
     let mut scaler = Context::get(
         decoder.format(),
         decoder.width(),
         decoder.height(),
         Pixel::RGB24,
-        new_width,
-        new_height,
+        decoder.width(),
+        decoder.height(),
         Flags::BICUBIC,
     )?;
 
-    let mut frame_index = 0;
-    let window_ref = &window;
+    let state_ref = &mut state;
 
     for (stream, packet) in input.packets() {
         if stream.index() == stream_index {
@@ -116,16 +113,12 @@ pub fn camera_stream(label: String, width: u32, height: u32, window: Window, rx:
 
             let mut decoded = Video::empty();
             if decoder.receive_frame(&mut decoded).is_ok() {
-                if frame_index == 0 {
-                    info!("Reading frames...");
-                }
-
                 let mut rgb_frame = Video::empty();
                 scaler.run(&decoded, &mut rgb_frame)?;
 
                 let mat = match Mat::from_slice(rgb_frame.data(0)) {
                     Ok(res) => {
-                        match res.reshape(3, new_height as i32) {
+                        match res.reshape(3, decoder.height() as i32) {
                             Ok(res2) => res2,
                             Err(error) =>{
                                 error!("Could not reshape matrix ({:})", error);
@@ -139,8 +132,7 @@ pub fn camera_stream(label: String, width: u32, height: u32, window: Window, rx:
                     }
                 };
 
-                grab_frame(mat, window_ref);
-                frame_index += 1;
+                grab_frame(mat, state_ref);
             }
         }
 

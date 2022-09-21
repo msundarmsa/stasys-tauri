@@ -8,8 +8,8 @@ use ffmpeg::util::frame::video::Video;
 
 use env_logger::Env;
 use log::{info, error};
-use opencv::core::{Point, VecN};
-use opencv::imgproc::{cvt_color, circle, LINE_8, FILLED};
+use opencv::core::{Point, VecN, Size};
+use opencv::imgproc::{cvt_color, circle, LINE_8, FILLED, resize, INTER_LINEAR};
 use opencv::prelude::*;
 use tauri::{Window, State};
 use std::sync::Mutex;
@@ -38,11 +38,35 @@ fn grab_camera_frames(
     window: Window,
     rx: Receiver<()>
 ) {
-    let grab_frame = |mat: Mat, window: &Window| {
-        let mut matcircle = mat.clone();
-        let mut output = mat.clone();
-        circle(&mut matcircle, Point{x: 150, y: 160}, 20, VecN([255.0, 0.0, 0.0, 0.0]), FILLED, LINE_8, 0);
-        cvt_color(&matcircle, &mut output, opencv::imgproc::COLOR_RGB2RGBA, 0);
+    struct FrameState {
+        frame_index: u32,
+        width: u32,
+        height: u32,
+        window: Window
+    }
+
+    let frame_index = 0;
+    let frame_state = FrameState{ frame_index, width, height, window };
+    let grab_frame = |mat: Mat, frame_state: &mut FrameState| {
+        if frame_state.frame_index == 0 {
+            info!("Reading frames. Input: {:} x {:}. Output: {:} x {:}", mat.cols(), mat.rows(), frame_state.width, frame_state.height);
+        }
+
+        // image processing pipeline
+        let mut frame = mat.clone();
+
+        // 1. draw red circle in center
+        let center = Point{x: frame.cols(), y: frame.rows()};
+        let color = VecN([255.0, 0.0, 0.0, 0.0]);
+        circle(&mut frame, center, 20, color, FILLED, LINE_8, 0);
+
+        // 2. resize frame
+        let mut resized = Mat::default();
+        resize(&frame, &mut resized, Size{width: frame_state.width as i32, height: frame_state.height as i32}, 0.0, 0.0, INTER_LINEAR);
+
+        // 3. convert RGB to RGBA for displaying to canvas
+        let mut output = Mat::default();
+        cvt_color(&resized, &mut output, opencv::imgproc::COLOR_RGB2RGBA, 0);
         let data = match output.data_bytes() {
             Ok(res) => res,
             Err(error) => {
@@ -51,12 +75,14 @@ fn grab_camera_frames(
             }
         };
 
-        window
+        frame_state.window
             .emit("grab_camera_frame", encode(data))
             .unwrap(); 
+        
+        frame_state.frame_index += 1;
     };
 
-    match camera_stream(label, width, height, window, rx, grab_frame) {
+    match camera_stream(label, rx, frame_state, grab_frame) {
         Ok(()) => (),
         Err(e) => {
             error!("Could not read frames from camera ({:})", e.to_string());
