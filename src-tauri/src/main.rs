@@ -8,6 +8,8 @@ use ffmpeg::util::frame::video::Video;
 
 use env_logger::Env;
 use log::{info, error};
+use opencv::imgproc::cvt_color;
+use opencv::prelude::*;
 use tauri::{Window, State};
 use std::sync::Mutex;
 use std::sync::mpsc::{Receiver, channel};
@@ -35,9 +37,19 @@ fn grab_camera_frames(
     window: Window,
     rx: Receiver<()>
 ) {
-    let grab_frame = |rgb_frame: Video, window: &Window| {
+    let grab_frame = |mat: Mat, window: &Window| {
+        let mut output = mat.clone();
+        cvt_color(&mat, &mut output, opencv::imgproc::COLOR_RGB2RGBA, 0);
+        let data = match output.data_bytes() {
+            Ok(res) => res,
+            Err(error) => {
+                error!("Could not get data bytes from Mat ({:})", error);
+                return;
+            }
+        };
+
         window
-            .emit("grab_camera_frame", encode(rgb_frame.data(0)))
+            .emit("grab_camera_frame", encode(data))
             .unwrap(); 
     };
 

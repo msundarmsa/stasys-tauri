@@ -6,6 +6,7 @@ use ffmpeg::format::{context::Input, Pixel};
 use ffmpeg::software::scaling::{context::Context, flag::Flags};
 use ffmpeg::util::frame::video::Video;
 use ffmpeg::{Dictionary, Error};
+use opencv::prelude::*;
 
 use std::ffi::CString;
 use std::path::Path;
@@ -63,7 +64,7 @@ fn get_camera_input(label: String) -> Result<Input, Error> {
     }
 }
 
-pub fn camera_stream(label: String, width: u32, height: u32, window: Window, rx: Receiver<()>, grab_frame: fn(Video, &Window)) -> Result<(), Error> {
+pub fn camera_stream(label: String, width: u32, height: u32, window: Window, rx: Receiver<()>, grab_frame: fn(Mat, &Window)) -> Result<(), Error> {
     info!("Starting camera {:} ({:} x {:})", label, width, height);
     
     let mut input = match get_camera_input(label) {
@@ -88,13 +89,15 @@ pub fn camera_stream(label: String, width: u32, height: u32, window: Window, rx:
     let context_decoder = ffmpeg::codec::context::Context::from_parameters(stream.parameters())?;
     let mut decoder = context_decoder.decoder().video()?;
 
+    let new_width = if width != 0 { width } else { decoder.width() };
+    let new_height = if height != 0 { height } else { decoder.height() };
     let mut scaler = Context::get(
         decoder.format(),
         decoder.width(),
         decoder.height(),
-        Pixel::RGBA,
-        if width != 0 { width } else { decoder.width() },
-        if height != 0 { height } else { decoder.height() },
+        Pixel::RGB24,
+        new_width,
+        new_height,
         Flags::BICUBIC,
     )?;
 
@@ -113,7 +116,24 @@ pub fn camera_stream(label: String, width: u32, height: u32, window: Window, rx:
 
                 let mut rgb_frame = Video::empty();
                 scaler.run(&decoded, &mut rgb_frame)?;
-                grab_frame(rgb_frame, window_ref);
+
+                let mat = match Mat::from_slice(rgb_frame.data(0)) {
+                    Ok(res) => {
+                        match res.reshape(3, new_height as i32) {
+                            Ok(res2) => res2,
+                            Err(error) =>{
+                                error!("Could not reshape matrix ({:})", error);
+                                continue;
+                            } 
+                        }
+                    },
+                    Err(error) => {
+                        error!("Could not convert frame to Mat ({:})", error);
+                        continue;
+                    }
+                };
+
+                grab_frame(mat, window_ref);
                 frame_index += 1;
             }
         }
