@@ -90,6 +90,8 @@ const Webcam = ({ setCameraId, setCameraThreshs, cameraThreshs, webcams }: IProp
         label: device_label,
         width: width,
         height: height,
+        minThresh: cameraThreshs[0],
+        maxThresh: cameraThreshs[1]
       };
       invoke('settings_choose_camera', args);
     }
@@ -110,7 +112,11 @@ const Webcam = ({ setCameraId, setCameraThreshs, cameraThreshs, webcams }: IProp
     }
 
     // send thresh changed to tauri backend
-    /** @todo: call tauri command */
+    let args = {
+      minThresh: newCameraThreshs[0],
+      maxThresh: newCameraThreshs[1]
+    };
+    invoke('settings_threshs_changed', args);
     setCameraThreshs(newCameraThreshs);
   };
 

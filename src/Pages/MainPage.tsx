@@ -27,7 +27,7 @@ export default function MainPage() {
   const [cameraId, setCameraId] = useState("");
   const [micId, setMicId] = useState("");
   const [micThresh, setMicThresh] = useState(0.2);
-  const [cameraThreshs, setCameraThreshs] = useState<number[]>([100, 150]);
+  const [cameraThreshs, setCameraThreshs] = useState<number[]>([120, 150]);
 
   // buttons
   const [calibrateStarted, setCalibrateStarted] = useState(false);

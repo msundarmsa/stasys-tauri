@@ -17,5 +17,7 @@ impl<T> Thread<T> {
             Ok(_) => info!("Thread {:} joined successfully", self.name),
             Err(error) => error!("Thread {:} could not be joined ({:?})", self.name, error)
         }
+
+        drop(self.tx); // close channel
     }
 }

@@ -4,16 +4,16 @@
 )]
 
 extern crate ffmpeg_next as ffmpeg;
-use ffmpeg::util::frame::video::Video;
 
 use env_logger::Env;
 use log::{info, error};
-use opencv::core::{Point, VecN, Size};
-use opencv::imgproc::{cvt_color, circle, LINE_8, FILLED, resize, INTER_LINEAR};
+use opencv::core::{Point, VecN, Size, BORDER_DEFAULT, Vector, KeyPoint, no_array, Ptr};
+use opencv::features2d::{SimpleBlobDetector, SimpleBlobDetector_Params};
+use opencv::imgproc::{cvt_color, circle, LINE_8, FILLED, resize, INTER_LINEAR, gaussian_blur};
 use opencv::prelude::*;
 use tauri::{Window, State};
 use std::sync::Mutex;
-use std::sync::mpsc::{Receiver, channel};
+use std::sync::mpsc::{Receiver, channel, Sender, TryRecvError};
 use std::thread::spawn;
 use base64::encode;
 
@@ -28,43 +28,103 @@ struct ManagedAppState(Mutex<AppState>);
 #[derive(Default)]
 struct AppState {
     camera_thread: Option<Thread<()>>,
+    tx_threshs: Option<Sender<(u32, u32)>>,
     mic_thread: Option<Thread<()>>
+}
+
+fn detect_circles(frame: &Mat, mut detector: Ptr<SimpleBlobDetector>) -> Vector<KeyPoint> {
+    // if frame is not grayscale, convert it
+    let mut gray_frame = Mat::default();
+    if frame.channels() == 3 {
+        cvt_color(&frame, &mut gray_frame, opencv::imgproc::COLOR_RGB2GRAY, 0);
+    }
+  
+    let mut blurred_frame = Mat::default();
+    gaussian_blur(&gray_frame, &mut blurred_frame, Size{width: 9, height: 9}, 0.0, 0.0, BORDER_DEFAULT);
+
+    let mut keypoints = Vector::new();
+    detector.detect(&blurred_frame, &mut keypoints, &no_array());
+
+    return keypoints;
 }
 
 fn grab_camera_frames(
     label: String,
     width: u32,
     height: u32,
+    min_thresh: u32,
+    max_thresh: u32,
     window: Window,
-    rx: Receiver<()>
+    rx: Receiver<()>,
+    rx_threshs: Receiver<(u32, u32)>,
 ) {
     struct FrameState {
         frame_index: u32,
         width: u32,
         height: u32,
-        window: Window
+        window: Window,
+        min_thresh: u32,
+        max_thresh: u32,
+        rx_threshs: Receiver<(u32, u32)>
     }
 
     let frame_index = 0;
-    let frame_state = FrameState{ frame_index, width, height, window };
+    let frame_state = FrameState{ frame_index, width, height, window, min_thresh, max_thresh, rx_threshs };
     let grab_frame = |mat: Mat, frame_state: &mut FrameState| {
         if frame_state.frame_index == 0 {
             info!("Reading frames. Input: {:} x {:}. Output: {:} x {:}", mat.cols(), mat.rows(), frame_state.width, frame_state.height);
+        }
+        
+        // check if threshs have changed
+        loop {
+            match frame_state.rx_threshs.try_recv() {
+                Ok((min_thresh, max_thresh)) => {
+                    frame_state.min_thresh = min_thresh;
+                    frame_state.max_thresh = max_thresh;
+                },
+                Err(_) => {
+                    break;
+                }
+            }
         }
 
         // image processing pipeline
         let mut frame = mat.clone();
 
-        // 1. draw red circle in center
-        let center = Point{x: frame.cols(), y: frame.rows()};
-        let color = VecN([255.0, 0.0, 0.0, 0.0]);
-        circle(&mut frame, center, 20, color, FILLED, LINE_8, 0);
+        // 1. detect circles
+        let mut params = SimpleBlobDetector_Params::default().unwrap();
+        params.min_threshold = frame_state.min_thresh as f32;
+        params.max_threshold = frame_state.max_thresh as f32;
 
-        // 2. resize frame
+        params.filter_by_color = false;
+        params.filter_by_convexity = false;
+
+        params.filter_by_area = true;
+        params.min_area = 450.0;
+        params.max_area = 10000.0;
+
+        params.filter_by_circularity = true;
+        params.min_circularity = 0.7;
+
+        params.filter_by_inertia = true;
+        params.min_inertia_ratio = 0.85;
+        let detector = SimpleBlobDetector::create(params).unwrap();
+
+        let keypoints = detect_circles(&frame, detector);
+
+        // 2. draw detected circles 
+        let color = VecN([255.0, 0.0, 0.0, 0.0]);
+        for keypoint in keypoints {
+            let center = Point{x: keypoint.pt.x as i32, y: keypoint.pt.y as i32};
+            let radius = (keypoint.size / 2.0) as i32;
+            circle(&mut frame, center, radius, color, FILLED, LINE_8, 0);
+        }
+
+        // 3. resize frame
         let mut resized = Mat::default();
         resize(&frame, &mut resized, Size{width: frame_state.width as i32, height: frame_state.height as i32}, 0.0, 0.0, INTER_LINEAR);
 
-        // 3. convert RGB to RGBA for displaying to canvas
+        // 4. convert RGB to RGBA for displaying to canvas
         let mut output = Mat::default();
         cvt_color(&resized, &mut output, opencv::imgproc::COLOR_RGB2RGBA, 0);
         let data = match output.data_bytes() {
@@ -97,15 +157,21 @@ fn settings_choose_camera(
     label: String,
     width: u32,
     height: u32,
+    min_thresh: u32,
+    max_thresh: u32,
     window: Window,
     state: State<ManagedAppState>,
 ) {
     // lock mutex to get value
     let mut curr_state = state.0.lock().unwrap();
+    
+    // create channel to communicate threshold changes
+    let (tx_threshs, rx_threshs) = channel();
+    curr_state.tx_threshs = Some(tx_threshs);
 
     // start thread to grab camera
     let (tx, rx) = channel();
-    let handle = spawn(move || grab_camera_frames(label, width, height, window, rx));
+    let handle = spawn(move || grab_camera_frames(label, width, height, min_thresh, max_thresh, window, rx, rx_threshs));
     let name = "grab_camera_frame".to_string();
     curr_state.camera_thread = Some(Thread{name, handle, tx});
 
@@ -119,7 +185,28 @@ fn settings_close_camera(state: State<ManagedAppState>) {
     let mut curr_state = state.0.lock().unwrap();
     
     if curr_state.camera_thread.is_some() {
+        // stop grab frame thread
         curr_state.camera_thread.take().unwrap().terminate();
+        curr_state.camera_thread = None;
+
+        // close threshold changes channel
+        drop(curr_state.tx_threshs.take().unwrap());
+        curr_state.tx_threshs = None;
+    }
+
+    // remove lock
+    drop(curr_state);
+}
+
+#[tauri::command]
+fn settings_threshs_changed(min_thresh: u32, max_thresh: u32, state: State<ManagedAppState>) {
+    // lock mutex to get value
+    let mut curr_state = state.0.lock().unwrap();
+    
+    if curr_state.tx_threshs.is_some() {
+        let tx_threshs = curr_state.tx_threshs.take().unwrap();
+        tx_threshs.send((min_thresh, max_thresh));
+        curr_state.tx_threshs = Some(tx_threshs);
     }
 
     // remove lock
@@ -187,7 +274,7 @@ fn main() {
 
     tauri::Builder::default()
         .manage(ManagedAppState(Default::default()))
-        .invoke_handler(tauri::generate_handler![settings_choose_camera, settings_close_camera, settings_choose_mic, settings_close_mic])
+        .invoke_handler(tauri::generate_handler![settings_choose_camera, settings_close_camera, settings_choose_mic, settings_close_mic, settings_threshs_changed])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
