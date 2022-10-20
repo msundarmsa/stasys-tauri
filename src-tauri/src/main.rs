@@ -5,8 +5,11 @@
 
 extern crate ffmpeg_next as ffmpeg;
 
-use env_logger::Env;
-use log::{info, error};
+use log::{info, error, LevelFilter};
+use log4rs::Config;
+use log4rs::append::file::FileAppender;
+use log4rs::config::{Appender, Root};
+use log4rs::encode::pattern::PatternEncoder;
 use opencv::core::{Point, VecN, Size, BORDER_DEFAULT, Vector, KeyPoint, no_array, Ptr};
 use opencv::features2d::{SimpleBlobDetector, SimpleBlobDetector_Params};
 use opencv::imgproc::{cvt_color, circle, LINE_8, FILLED, resize, INTER_LINEAR, gaussian_blur};
@@ -16,6 +19,7 @@ use std::sync::Mutex;
 use std::sync::mpsc::{Receiver, channel, Sender};
 use std::thread::spawn;
 use base64::encode;
+use std::time::Instant;
 
 mod thread;
 mod camera;
@@ -32,7 +36,7 @@ struct AppState {
     mic_thread: Option<Thread<()>>
 }
 
-fn detect_circles(frame: &Mat, mut detector: Ptr<SimpleBlobDetector>) -> Vector<KeyPoint> {
+fn detect_circles(frame: &Mat, detector: &mut Ptr<SimpleBlobDetector>) -> Vector<KeyPoint> {
     // if frame is not grayscale, convert it
     let mut gray_frame = Mat::default();
     if frame.channels() == 3 {
@@ -63,13 +67,32 @@ fn grab_camera_frames(
         width: u32,
         height: u32,
         window: Window,
-        min_thresh: u32,
-        max_thresh: u32,
-        rx_threshs: Receiver<(u32, u32)>
+        rx_threshs: Receiver<(u32, u32)>,
+        start_time: Instant,
+        params: SimpleBlobDetector_Params,
+        detector: Ptr<SimpleBlobDetector>
     }
 
     let frame_index = 0;
-    let frame_state = FrameState{ frame_index, width, height, window, min_thresh, max_thresh, rx_threshs };
+    let start_time = Instant::now();
+    let mut params = SimpleBlobDetector_Params::default().unwrap();
+    params.min_threshold = min_thresh as f32;
+    params.max_threshold = max_thresh as f32;
+
+    params.filter_by_color = false;
+    params.filter_by_convexity = false;
+
+    params.filter_by_area = true;
+    params.min_area = 450.0;
+    params.max_area = 10000.0;
+
+    params.filter_by_circularity = true;
+    params.min_circularity = 0.7;
+
+    params.filter_by_inertia = true;
+    params.min_inertia_ratio = 0.85;
+    let detector = SimpleBlobDetector::create(params).unwrap();
+    let frame_state = FrameState{ frame_index, width, height, window, rx_threshs, start_time, params, detector };
     let grab_frame = |mat: Mat, frame_state: &mut FrameState| {
         if frame_state.frame_index == 0 {
             info!("Reading frames. Input: {:} x {:}. Output: {:} x {:}", mat.cols(), mat.rows(), frame_state.width, frame_state.height);
@@ -79,8 +102,9 @@ fn grab_camera_frames(
         loop {
             match frame_state.rx_threshs.try_recv() {
                 Ok((min_thresh, max_thresh)) => {
-                    frame_state.min_thresh = min_thresh;
-                    frame_state.max_thresh = max_thresh;
+                    frame_state.params.min_threshold = min_thresh as f32;
+                    frame_state.params.max_threshold = max_thresh as f32;
+                    frame_state.detector = SimpleBlobDetector::create(frame_state.params).unwrap();
                 },
                 Err(_) => {
                     break;
@@ -91,38 +115,20 @@ fn grab_camera_frames(
         // image processing pipeline
         let mut frame = mat.clone();
 
-        // 1. detect circles
-        let mut params = SimpleBlobDetector_Params::default().unwrap();
-        params.min_threshold = frame_state.min_thresh as f32;
-        params.max_threshold = frame_state.max_thresh as f32;
+        // 1. resize frame
+        let mut resized = Mat::default();
+        resize(&frame, &mut resized, Size{width: frame_state.width as i32, height: frame_state.height as i32}, 0.0, 0.0, INTER_LINEAR);
 
-        params.filter_by_color = false;
-        params.filter_by_convexity = false;
+        // 2. detect circles
+        let keypoints = detect_circles(&frame, &mut frame_state.detector);
 
-        params.filter_by_area = true;
-        params.min_area = 450.0;
-        params.max_area = 10000.0;
-
-        params.filter_by_circularity = true;
-        params.min_circularity = 0.7;
-
-        params.filter_by_inertia = true;
-        params.min_inertia_ratio = 0.85;
-        let detector = SimpleBlobDetector::create(params).unwrap();
-
-        let keypoints = detect_circles(&frame, detector);
-
-        // 2. draw detected circles 
+        // 3. draw detected circles 
         let color = VecN([255.0, 0.0, 0.0, 0.0]);
         for keypoint in keypoints {
             let center = Point{x: keypoint.pt.x as i32, y: keypoint.pt.y as i32};
             let radius = (keypoint.size / 2.0) as i32;
-            circle(&mut frame, center, radius, color, FILLED, LINE_8, 0);
-        }
-
-        // 3. resize frame
-        let mut resized = Mat::default();
-        resize(&frame, &mut resized, Size{width: frame_state.width as i32, height: frame_state.height as i32}, 0.0, 0.0, INTER_LINEAR);
+            circle(&mut resized, center, radius, color, FILLED, LINE_8, 0);
+        } 
 
         // 4. convert RGB to RGBA for displaying to canvas
         let mut output = Mat::default();
@@ -137,7 +143,7 @@ fn grab_camera_frames(
 
         frame_state.window
             .emit("grab_camera_frame", encode(data))
-            .unwrap(); 
+            .unwrap();
         
         frame_state.frame_index += 1;
     };
@@ -180,7 +186,8 @@ fn settings_choose_camera(
 }
 
 #[tauri::command]
-fn settings_close_camera(state: State<ManagedAppState>) {
+fn settings_close_camera(state: State<ManagedAppState>, window: Window) {
+    window.emit("show_message", "Hello World!");
     // lock mutex to get value
     let mut curr_state = state.0.lock().unwrap();
     
@@ -267,7 +274,21 @@ fn settings_close_mic(state: State<ManagedAppState>) {
 }
 
 fn main() {
-    env_logger::Builder::from_env(Env::default().default_filter_or("debug")).init();
+    // create log file appender
+    let logfile = FileAppender::builder()
+    .encoder(Box::new(PatternEncoder::default()))
+    .build("STASYS.log")
+    .unwrap();
+
+    // add the logfile appender to the config
+    let config = Config::builder()
+    .appender(Appender::builder().build("logfile", Box::new(logfile)))
+    .build(Root::builder().appender("logfile").build(LevelFilter::Info))
+    .unwrap();
+
+    // init log4rs
+    log4rs::init_config(config).unwrap();
+
     ffmpeg::init().unwrap();
 
     info!("Started backend");

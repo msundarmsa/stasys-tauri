@@ -150,9 +150,9 @@ const Webcam = ({ setCameraId, setCameraThreshs, cameraThreshs, webcams }: IProp
           horizontal: "left",
         }}
       >
-        {webcams.map((device) => (
-          <MenuItem key={device.label} onClick={() => selectWebcam(device.label, false)}>
-            {device.label}
+        {webcams.map((webcam) => (
+          <MenuItem key={webcam} onClick={() => selectWebcam(webcam, false)}>
+            {webcam}
           </MenuItem>
         ))}
         <MenuItem key="Choose File" onClick={chooseFile}>
@@ -225,7 +225,7 @@ interface IProps {
   setCameraId: (id: string) => void;
   setCameraThreshs: (threshs: number[]) => void;
   cameraThreshs: number[];
-  webcams: MediaDeviceInfo[];
+  webcams: string[];
 }
 
 export default Webcam;

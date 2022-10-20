@@ -24,7 +24,9 @@ fn get_camera_input(label: String) -> Result<Input, Error> {
     let is_path = label.contains("/") || label.contains("\\"); 
     if label.contains("USB") {
         options.set("framerate", "120");
-        options.set("pixel_format", "bgr0");
+        options.set("vcodec", "mjpeg");
+        options.set("video_size", "1280x720");
+        options.set("rtbufsize", "30M");
     } else if is_path {
         // pass 
     } else {

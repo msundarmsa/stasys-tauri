@@ -49,7 +49,7 @@ interface IProps {
   setMicId: (id: string) => void;
   setMicThresh: (thresh: number) => void;
   micThresh: number;
-  webcams: MediaDeviceInfo[];
+  webcams: string[];
   mics: MediaDeviceInfo[];
   handleClose: () => void;
 }

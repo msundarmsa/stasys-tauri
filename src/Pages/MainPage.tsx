@@ -2,6 +2,7 @@ import { Alert, AlertColor, AppBar, Box, Button, IconButton, Modal, Snackbar, To
 import SettingsIcon from "@mui/icons-material/Settings";
 import { useEffect, useState } from "react";
 import SettingsPage from "./SettingsPage";
+import { listen } from '@tauri-apps/api/event';
 
 export default function MainPage() {
   // settings modal
@@ -22,7 +23,7 @@ export default function MainPage() {
   };
 
   // user options
-  const [webcams, setWebcams] = useState<MediaDeviceInfo[]>([]);
+  const [webcams, setWebcams] = useState<string[]>([]);
   const [mics, setMics] = useState<MediaDeviceInfo[]>([]);
   const [cameraId, setCameraId] = useState("");
   const [micId, setMicId] = useState("");
@@ -47,6 +48,9 @@ export default function MainPage() {
 
   useEffect(() => {
     chooseDefaultCameraAndMic();
+    listen('show_message', (event) => {
+      showToast("info", event.payload as string);
+    });
   }, []);
 
   async function chooseDefaultCameraAndMic() {
@@ -64,7 +68,9 @@ export default function MainPage() {
     const mydevices = await navigator.mediaDevices.enumerateDevices();
 
     // get webcams
-    const webcams = mydevices.filter((device) => device.kind === "videoinput");
+    const webcams = mydevices
+      .filter((device) => device.kind === "videoinput")
+      .map((device, _1, _2) => device.label.split(' (')[0]);
 
     // get mics
     const mics = mydevices.filter(
@@ -79,8 +85,8 @@ export default function MainPage() {
 
     // choose webcam with name "USB" if user has not selected video
     for (let i = 0; i < webcams.length; i++) {
-      if (webcams[i].label.includes("USB") && !user_chose_video) {
-        setCameraId(webcams[i].label);
+      if (webcams[i].includes("USB") && !user_chose_video) {
+        setCameraId(webcams[i]);
         usbVideoExists = true;
       }
     }
@@ -107,7 +113,7 @@ export default function MainPage() {
       (!user_chose_video && !usbVideoExists) ||
       (!user_chose_audio && !usbAudioExists)
     ) {
-      setCameraId(webcams[0].label);
+      setCameraId(webcams[0]);
       setMicId(mics[0].label);
       showToast(
         "info",
