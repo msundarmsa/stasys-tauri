@@ -6,8 +6,8 @@
     "distDir": "../dist"
   },
   "package": {
-    "productName": "stasys-tauri",
-    "version": "0.0.0"
+    "productName": "STASYS",
+    "version": "0.0.1"
   },
   "tauri": {
     "allowlist": {
@@ -28,7 +28,7 @@
         "icons/icon.icns",
         "icons/icon.ico"
       ],
-      "identifier": "com.tauri.dev",
+      "identifier": "com.msundarmsa.stasys",
       "longDescription": "",
       "macOS": {
         "entitlements": null,
@@ -56,8 +56,8 @@
       {
         "fullscreen": false,
         "height": 1080,
-        "resizable": true,
-        "title": "stasys-tauri",
+        "resizable": false,
+        "title": "STASYS",
         "width": 1920
       }
     ]

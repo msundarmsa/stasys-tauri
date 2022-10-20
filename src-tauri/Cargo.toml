@@ -21,7 +21,7 @@ ffmpeg-next = "5.1.1"
 base64 = "0.13.0"
 env_logger = "0.9.0"
 log = "0.4.17"
-opencv = "0.68.0"
+opencv = "0.70.0"
 
 [features]
 # by default Tauri runs in production mode

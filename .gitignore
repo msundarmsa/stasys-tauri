@@ -1,3 +1,7 @@
+# Custom
+frameworks
+dependency_walker.py
+
 # Logs
 logs
 *.log

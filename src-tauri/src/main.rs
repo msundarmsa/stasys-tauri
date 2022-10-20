@@ -13,7 +13,7 @@ use opencv::imgproc::{cvt_color, circle, LINE_8, FILLED, resize, INTER_LINEAR, g
 use opencv::prelude::*;
 use tauri::{Window, State};
 use std::sync::Mutex;
-use std::sync::mpsc::{Receiver, channel, Sender, TryRecvError};
+use std::sync::mpsc::{Receiver, channel, Sender};
 use std::thread::spawn;
 use base64::encode;
 

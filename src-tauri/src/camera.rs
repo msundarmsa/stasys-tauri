@@ -21,7 +21,7 @@ fn path_to_cstr<P: AsRef<Path>>(path: &P) -> CString {
 
 fn get_camera_input(label: String) -> Result<Input, Error> {
     let mut options = Dictionary::new();
-    let is_path =label.contains("/") || label.contains("\\"); 
+    let is_path = label.contains("/") || label.contains("\\"); 
     if label.contains("USB") {
         options.set("framerate", "120");
         options.set("pixel_format", "bgr0");
@@ -34,19 +34,21 @@ fn get_camera_input(label: String) -> Result<Input, Error> {
 
     unsafe {
         let mut ps = ptr::null_mut();
-        let path = path_to_cstr(&label);
         let mut opts = options.disown();
         let format;
+        let mut new_label = label.clone();
         if is_path {
             format = CString::new("").unwrap();
         } else if cfg!(target_os = "macos") {
             format = CString::new("avfoundation").unwrap();
         } else if cfg!(windows) {
             format = CString::new("dshow").unwrap();
+            new_label = format!("video={:}", label);
         } else{
             error!("Operating system not supported");
             return Err(Error::Bug);
         }
+        let path = path_to_cstr(&new_label);
         let fmt = av_find_input_format(format.as_ptr());
 
         if fmt == ptr::null_mut() {

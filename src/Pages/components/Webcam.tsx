@@ -40,7 +40,7 @@ const Webcam = ({ setCameraId, setCameraThreshs, cameraThreshs, webcams }: IProp
         (c) => c.charCodeAt(0)
       );
       const { width, height } = canvas.getBoundingClientRect();
-      let myImageData = new ImageData(imageArr, width, height);
+      let myImageData = new ImageData(imageArr, Math.floor(width), Math.floor(height));
       ctx.putImageData(myImageData, 0, 0);
     });
   }
@@ -88,8 +88,8 @@ const Webcam = ({ setCameraId, setCameraThreshs, cameraThreshs, webcams }: IProp
       const { width, height } = canvasRef.current.getBoundingClientRect();
       let args = {
         label: device_label,
-        width: width,
-        height: height,
+        width: Math.floor(width),
+        height: Math.floor(height),
         minThresh: cameraThreshs[0],
         maxThresh: cameraThreshs[1]
       };
