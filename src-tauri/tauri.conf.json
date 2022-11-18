@@ -55,10 +55,10 @@
     "windows": [
       {
         "fullscreen": false,
-        "height": 720,
+        "height": 1080,
         "resizable": false,
         "title": "STASYS",
-        "width": 1080
+        "width": 1920
       }
     ]
   }

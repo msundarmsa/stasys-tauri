@@ -69,12 +69,14 @@ fn grab_camera_frames(
         window: Window,
         rx_threshs: Receiver<(u32, u32)>,
         start_time: Instant,
+        prev_frame_time: Instant,
         params: SimpleBlobDetector_Params,
         detector: Ptr<SimpleBlobDetector>
     }
 
     let frame_index = 0;
     let start_time = Instant::now();
+    let prev_frame_time = Instant::now();
     let mut params = SimpleBlobDetector_Params::default().unwrap();
     params.min_threshold = min_thresh as f32;
     params.max_threshold = max_thresh as f32;
@@ -92,11 +94,16 @@ fn grab_camera_frames(
     params.filter_by_inertia = true;
     params.min_inertia_ratio = 0.85;
     let detector = SimpleBlobDetector::create(params).unwrap();
-    let frame_state = FrameState{ frame_index, width, height, window, rx_threshs, start_time, params, detector };
+    let frame_state = FrameState{ frame_index, width, height, window, rx_threshs, start_time, prev_frame_time, params, detector };
     let grab_frame = |mat: Mat, frame_state: &mut FrameState| {
         if frame_state.frame_index == 0 {
             info!("Reading frames. Input: {:} x {:}. Output: {:} x {:}", mat.cols(), mat.rows(), frame_state.width, frame_state.height);
+        } else if frame_state.prev_frame_time.elapsed().as_secs_f64() < 0.03 {
+            // only process at 30fps for output to UI
+            return
         }
+
+        frame_state.prev_frame_time = Instant::now();
         
         // check if threshs have changed
         loop {
@@ -187,7 +194,6 @@ fn settings_choose_camera(
 
 #[tauri::command]
 fn settings_close_camera(state: State<ManagedAppState>, window: Window) {
-    window.emit("show_message", "Hello World!");
     // lock mutex to get value
     let mut curr_state = state.0.lock().unwrap();
     
