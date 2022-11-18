@@ -79,7 +79,7 @@ const Mic = ({ setMicId, setMicThresh, micThresh, mics }: IProps) => {
     setData([]);
   };
 
-  async function selectMic(device: MediaDeviceInfo) {
+  async function selectMic(device_label: string) {
     if (micStarted) {
       // stop previous mic if running before starting new one
       stopMic();
@@ -87,13 +87,13 @@ const Mic = ({ setMicId, setMicThresh, micThresh, mics }: IProps) => {
 
     // update state
     setMicStarted(true);
-    setDeviceLabel(device.label);
-    setMicId(device.deviceId);
+    setDeviceLabel(device_label);
+    setMicId(device_label);
     closeMics();
 
     // send start signal to tauri backend
     let args = {
-      label: device.label,
+      label: device_label,
     };
     invoke('settings_choose_mic', args);
   }
@@ -116,8 +116,8 @@ const Mic = ({ setMicId, setMicThresh, micThresh, mics }: IProps) => {
         }}
       >
         {mics.map((device) => (
-          <MenuItem key={device.label} onClick={() => selectMic(device)}>
-            {device.label}
+          <MenuItem key={device} onClick={() => selectMic(device)}>
+            {device}
           </MenuItem>
         ))}
       </Menu>
@@ -189,7 +189,7 @@ interface IProps {
   setMicId: (id: string) => void;
   setMicThresh: (thresh: number) => void;
   micThresh: number;
-  mics: MediaDeviceInfo[];
+  mics: string[];
 }
 
 export default Mic;

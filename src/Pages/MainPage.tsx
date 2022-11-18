@@ -24,7 +24,7 @@ export default function MainPage() {
 
   // user options
   const [webcams, setWebcams] = useState<string[]>([]);
-  const [mics, setMics] = useState<MediaDeviceInfo[]>([]);
+  const [mics, setMics] = useState<string[]>([]);
   const [cameraId, setCameraId] = useState("");
   const [micId, setMicId] = useState("");
   const [micThresh, setMicThresh] = useState(0.2);
@@ -75,8 +75,8 @@ export default function MainPage() {
     // get mics
     const mics = mydevices.filter(
       (device) =>
-        device.kind === "audioinput" && !device.label.startsWith("Default")
-    );
+        device.kind === "audioinput" && !device.label.startsWith("Default") && !device.label.startsWith("Communications")
+    ).map((device, _1, _2) => device.label.split(/ \([0-9]/)[0]);
 
     const user_chose_video = cameraId != "";
     const user_chose_audio = micId != "";
@@ -93,8 +93,8 @@ export default function MainPage() {
 
     // choose mic with name "USB" if user has not selected audio
     for (let i = 0; i < mics.length; i++) {
-      if (mics[i].label.includes("USB") && !user_chose_audio) {
-        setMicId(mics[i].label);
+      if (mics[i].includes("USB") && !user_chose_audio) {
+        setMicId(mics[i]);
         usbAudioExists = true;
       }
     }
@@ -114,7 +114,7 @@ export default function MainPage() {
       (!user_chose_audio && !usbAudioExists)
     ) {
       setCameraId(webcams[0]);
-      setMicId(mics[0].label);
+      setMicId(mics[0]);
       showToast(
         "info",
         "Could not find USB camera/mic. Chosen first available camera/mic. If you would like to change this please go to settings dialog and manually select the camera and microphone."

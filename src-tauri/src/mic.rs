@@ -12,6 +12,7 @@ use std::ptr;
 use std::sync::mpsc::{Receiver, TryRecvError};
 use log::{info, error, warn};
 use tauri::Window;
+use std::time::Instant;
 
 fn path_to_cstr<P: AsRef<Path>>(path: &P) -> CString {
     CString::new(path.as_ref().as_os_str().to_str().unwrap()).unwrap()
@@ -20,12 +21,14 @@ fn path_to_cstr<P: AsRef<Path>>(path: &P) -> CString {
 fn get_mic_input(label: String) -> Result<Input, Error> {
     unsafe {
         let mut ps = ptr::null_mut();
-        let path = path_to_cstr(&format!(":{:}", label));
         let format;
+        let mut new_label = label.clone();
         if cfg!(target_os = "macos") {
             format = CString::new("avfoundation").unwrap();
+            new_label = format!(":{:}", label);
         } else if cfg!(windows) {
             format = CString::new("dshow").unwrap();
+            new_label = format!("audio={:}", label);
         } else{
             error!("Operating system not supported");
             return Err(Error::Bug);
@@ -35,6 +38,7 @@ fn get_mic_input(label: String) -> Result<Input, Error> {
         if fmt == ptr::null_mut() {
             warn!("fmt is null ptr");
         }
+        let path = path_to_cstr(&new_label);
         let res = avformat_open_input(&mut ps, path.as_ptr(), fmt, ptr::null_mut());
 
         match res {
@@ -77,6 +81,7 @@ pub fn mic_stream(label: String, window: Window, rx: Receiver<()>, grab_frame: f
     let mut decoder = context_decoder.decoder().audio()?;
 
     let mut frame_index = 0;
+    let start_time = Instant::now();
     let window_ref = &window;
 
     for (stream, packet) in input.packets() {
@@ -86,18 +91,34 @@ pub fn mic_stream(label: String, window: Window, rx: Receiver<()>, grab_frame: f
             let mut decoded = Audio::empty();
             if decoder.receive_frame(&mut decoded).is_ok() {
                 if frame_index == 0 {
-                    info!("Reading frames...");
+                    info!("Reading audio frames...");
+                    info!("Audio format: {:}", decoded.format().name());
                 }
-                
+
                 let data = decoded.data(0);
                 let mut volume = 0.0;
                 let mut n_samples = 0.0;
-                for sample in data.chunks(4) {
-                    let mut sample_4: [u8; 4] = Default::default();
-                    sample_4.copy_from_slice(sample);
-                    let sample = f32::from_le_bytes(sample_4) as f64;
-                    volume += sample * sample;
-                    n_samples += 1.0;
+                if cfg!(target_os = "macos") {
+                    // audio format is usually f64
+                    for sample in data.chunks(4) {
+                        let mut sample_4: [u8; 4] = Default::default();
+                        sample_4.copy_from_slice(sample);
+                        let sample = f32::from_le_bytes(sample_4) as f64;
+                        volume += sample * sample;
+                        n_samples += 1.0;
+                    }
+                } else if cfg!(windows) {
+                    // audio format is usually s16
+                    for sample in data.chunks(2) {
+                        let mut sample_2: [u8; 2] = Default::default();
+                        sample_2.copy_from_slice(sample);
+                        let sample = i16::from_le_bytes(sample_2) as f64 / 32.768;
+                        volume += sample * sample;
+                        n_samples += 1.0;
+                    }
+                } else{
+                    error!("Operating system not supported");
+                    return Err(Error::Bug);
                 }
 
                 volume /= n_samples;
@@ -106,6 +127,9 @@ pub fn mic_stream(label: String, window: Window, rx: Receiver<()>, grab_frame: f
                 grab_frame(volume, window_ref);
 
                 frame_index += 1;
+
+                let fps = frame_index as f64 / start_time.elapsed().as_secs_f64();
+                info!("FPS: {:}", fps);
             }
         }
 

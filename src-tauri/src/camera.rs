@@ -13,7 +13,6 @@ use std::path::Path;
 use std::ptr;
 use std::sync::mpsc::{Receiver, TryRecvError};
 use log::{info, error, warn};
-use tauri::Window;
 
 fn path_to_cstr<P: AsRef<Path>>(path: &P) -> CString {
     CString::new(path.as_ref().as_os_str().to_str().unwrap()).unwrap()
@@ -26,7 +25,6 @@ fn get_camera_input(label: String) -> Result<Input, Error> {
         options.set("framerate", "120");
         options.set("vcodec", "mjpeg");
         options.set("video_size", "1280x720");
-        options.set("rtbufsize", "30M");
     } else if is_path {
         // pass 
     } else {
