@@ -11,15 +11,14 @@ jobs:
     steps:
       - name: Download source
         uses: actions/checkout@v2
-      - name: Install opencv and ffmpeg
-        run: |
-          brew update
-          brew install ffmpeg opencv
-          brew upgrade 
       - name: Setup node v17
         uses: actions/setup-node@v1
         with:
           node-version: 17
+      - name: Install opencv and ffmpeg
+        run: |
+          brew update
+          brew install ffmpeg opencv
       - name: Install Dependencies
         run: yarn
       - name: Build app
