@@ -87,7 +87,7 @@ pub fn camera_stream<T>(label: String, rx: Receiver<()>, mut state: T, grab_fram
     let stream = match input.streams().best(ffmpeg::media::Type::Video) {
         Some(s) => s,
         None => {
-            error!("Could not video stream from camera");
+            error!("Could not get video stream from camera");
             return Err(Error::Bug);
         }
     };

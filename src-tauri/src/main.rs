@@ -15,6 +15,7 @@ use opencv::features2d::{SimpleBlobDetector, SimpleBlobDetector_Params};
 use opencv::imgproc::{cvt_color, circle, LINE_8, FILLED, resize, INTER_LINEAR, gaussian_blur};
 use opencv::prelude::*;
 use tauri::{Window, State};
+use std::env;
 use std::sync::Mutex;
 use std::sync::mpsc::{Receiver, channel, Sender};
 use std::thread::spawn;
@@ -232,6 +233,8 @@ fn grab_mic_frames(
     rx: Receiver<()>
 ) {
     let grab_frame = |volume: f64, window: &Window| {
+        info!("Received audio frame: {:}", volume);
+
         window
             .emit("grab_mic_frame", volume)
             .unwrap();
@@ -280,10 +283,12 @@ fn settings_close_mic(state: State<ManagedAppState>) {
 }
 
 fn main() {
+    let logdir = env::current_exe().unwrap().parent().unwrap().join("STASYS.log");
+
     // create log file appender
     let logfile = FileAppender::builder()
     .encoder(Box::new(PatternEncoder::default()))
-    .build("STASYS.log")
+    .build(logdir)
     .unwrap();
 
     // add the logfile appender to the config

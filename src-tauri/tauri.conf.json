@@ -31,7 +31,7 @@
       "identifier": "com.msundarmsa.stasys",
       "longDescription": "",
       "macOS": {
-        "entitlements": null,
+        "entitlements": "Entitlements.plist",
         "exceptionDomain": "",
         "frameworks": [],
         "providerShortName": null,
