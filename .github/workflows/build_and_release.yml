@@ -9,30 +9,34 @@ jobs:
   build_macos:
     runs-on: macos-latest
     steps:
+      - name: Install opencv and ffmpeg
+        run: brew install ffmpeg opencv
+        continue-on-error: true
       - name: Download source
         uses: actions/checkout@v2
+        continue-on-error: true
       - name: Setup node v17
         uses: actions/setup-node@v1
         with:
           node-version: 17
-      - name: Install opencv and ffmpeg
-        run: |
-          brew update
-          brew upgrade
-          brew install ffmpeg opencv
+        continue-on-error: true
       - name: Install Dependencies
         run: yarn
+        continue-on-error: true
       - name: Build app
         run: ./build.sh
+        continue-on-error: true
       - name: Upload app
         uses: actions/upload-artifact@v3
         with:
           name: STASYS-macos
           path: out/STASYS.dmg
+        continue-on-error: true
 
   release_app:
     runs-on: ubuntu-latest
     needs: [build_macos]
+    continue-on-error: true
     steps:
       - name: Download macos app
         uses: actions/download-artifact@v3
