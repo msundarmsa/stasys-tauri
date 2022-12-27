@@ -38,22 +38,20 @@ jobs:
           echo "OPENCV_INCLUDE_PATHS=C:\\tools\\opencv\\build\\include" >> $GITHUB_ENV
           echo "OPENCV_LINK_LIBS=opencv_world460" >> $GITHUB_ENV
           echo "OPENCV_LINK_PATHS=C:\\tools\\opencv\\build\\x64\\vc15\\lib" >> $GITHUB_ENV
-          echo $(ls $OPENCV_LINK_PATHS)
       - name: Install ffmpeg
         run: |
-          echo "Downloading ffmpeg to $HOME/ffmpeg.7z"
           curl -L -o $HOME/ffmpeg.7z https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-full-shared.7z
           7z x $HOME/ffmpeg.7z -o$HOME/ffmpeg
           mv $HOME/ffmpeg/*/* $HOME/ffmpeg/
-          echo "FFMPEG_DIR=$HOME\\ffmpeg" >> $GITHUB_ENV
-          echo $(ls $FFMPEG_DIR)
+          echo "FFMPEG_DIR=C:\\Users\\runneradmin\\ffmpeg" >> $GITHUB_ENV
       - name: Print environment variables
         run: |
           echo $OPENCV_INCLUDE_PATHS
           echo $OPENCV_LINK_LIBS
           echo $OPENCV_LINK_PATHS
+          ls $OPENCV_LINK_PATHS
           echo $FFMPEG_DIR
-          pwd
+          ls $FFMPEG_DIR
       - name: Setup node v17
         uses: actions/setup-node@v1
         with:
