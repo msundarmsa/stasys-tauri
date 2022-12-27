@@ -52,6 +52,8 @@ jobs:
           ls $OPENCV_LINK_PATHS
           echo $FFMPEG_DIR
           ls $FFMPEG_DIR
+      - name: Download source
+        uses: actions/checkout@v2
       - name: Setup node v17
         uses: actions/setup-node@v1
         with:
