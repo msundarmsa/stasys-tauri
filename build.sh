@@ -21,7 +21,14 @@ else
     mkdir -p out/STASYS/
     cp $TARGET_DIR/STASYS.exe out/STASYS/
     cp "C:\\tools\\opencv\\build\\x64\\vc15\\bin\\opencv_world460.dll" out/STASYS/
-    cp "$FFMPEG_DIR\\bin\\*.dll" out/STASYS/
+    cp "$FFMPEG_DIR\\bin\\avcodec-59.dll" out/STASYS/
+    cp "$FFMPEG_DIR\\bin\\avdevice-59.dll" out/STASYS/
+    cp "$FFMPEG_DIR\\bin\\avfilter-8.dll" out/STASYS/
+    cp "$FFMPEG_DIR\\bin\\avformat-59.dll" out/STASYS/
+    cp "$FFMPEG_DIR\\bin\\avutil-57.dll" out/STASYS/
+    cp "$FFMPEG_DIR\\bin\\postproc-56.dll" out/STASYS/
+    cp "$FFMPEG_DIR\\bin\\swresample-4.dll" out/STASYS/
+    cp "$FFMPEG_DIR\\bin\\swscale-6.dll" out/STASYS/
     ls out/STASYS/
     powershell "Compress-Archive out/STASYS/ out/STASYS.zip"
 fi
