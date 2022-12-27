@@ -28,10 +28,6 @@ jobs:
           path: out/STASYS.dmg
   build_windows:
     runs-on: windows-latest
-    env: |
-      OPENCV_INCLUDE_PATHS=C:\tools\opencv\build\include
-      OPENCV_LINK_LIBS=opencv_world460
-      OPENCV_LINK_PATHS=C:\tools\opencv\build\x64\vc15\lib
     defaults:
       run:
         shell: bash
@@ -39,12 +35,17 @@ jobs:
       - name: Install opencv
         run: |
           choco install -y opencv --version 4.6.0
+          echo "OPENCV_INCLUDE_PATHS=C:\\tools\\opencv\\build\\include" >> $GITHUB_ENV
+          echo "OPENCV_LINK_LIBS=opencv_world460" >> $GITHUB_ENV
+          echo "OPENCV_LINK_PATHS=C:\\tools\\opencv\\build\\x64\\vc15\\lib" >> $GITHUB_ENV
+          ls $OPENCV_LINK_PATHS
       - name: Install ffmpeg
         run: |
           curl -L -o $HOME/ffmpeg.7z https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-full-shared.7z
           7z x ffmpeg.7z -offmpeg
           mv ffmpeg/*/* ffmpeg/
           echo "FFMPEG_DIR=$HOME\\ffmpeg" >> $GITHUB_ENV
+          ls $FFMPEG_DIR
       - name: Print environment variables
         run: |
           echo $OPENCV_INCLUDE_PATHS
@@ -52,8 +53,6 @@ jobs:
           echo $OPENCV_LINK_PATHS
           echo $FFMPEG_DIR
           pwd
-          ls $FFMPEG_DIR
-          ls $OPENCV_LINK_LIBS
       - name: Setup node v17
         uses: actions/setup-node@v1
         with:
