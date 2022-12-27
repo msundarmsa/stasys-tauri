@@ -26,19 +26,65 @@ jobs:
         with:
           name: STASYS-macos
           path: out/STASYS.dmg
+  build_windows:
+    runs-on: windows-latest
+    env:
+      OPENCV_INCLUDE_PATHS=C:\tools\opencv\build\include
+      OPENCV_LINK_LIBS=opencv_world460
+      OPENCV_LINK_PATHS=C:\tools\opencv\build\x64\vc15\lib
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Install opencv
+        run: |
+          choco install -y opencv --version 4.6.0
+      - name: Install ffmpeg
+        run: |
+          curl -L -o $HOME/ffmpeg.7z https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-full-shared.7z
+          7z x ffmpeg.7z -offmpeg
+          mv ffmpeg/*/* ffmpeg/
+          echo "FFMPEG_DIR=$HOME\\ffmpeg" >> $GITHUB_ENV
+      - name: Print environment variables
+        run: |
+          echo $OPENCV_INCLUDE_PATHS
+          echo $OPENCV_LINK_LIBS
+          echo $OPENCV_LINK_PATHS
+          echo $FFMPEG_DIR
+          pwd
+          ls $FFMPEG_DIR
+          ls $OPENCV_LINK_LIBS
+      - name: Setup node v17
+        uses: actions/setup-node@v1
+        with:
+          node-version: 17
+      - name: Install Dependencies
+        run: yarn
+      - name: Build app
+        run: ./build.sh
+      - name: Upload app
+        uses: actions/upload-artifact@v3
+        with:
+          name: STASYS-windows
+          path: out/STASYS.zip
 
   release_app:
     runs-on: ubuntu-latest
-    needs: [build_macos]
+    needs: [build_macos, build_windows]
     steps:
       - name: Download macos app
         uses: actions/download-artifact@v3
         with:
           name: STASYS-macos
-      - name: Release macos app
+      - name: Download windows app
+        uses: actions/download-artifact@v3
+        with:
+          name: STASYS-windows
+      - name: Release macos & windows app
         uses: "marvinpinto/action-automatic-releases@latest"
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
           prerelease: false
           files: |
             STASYS.dmg
+            STASYS.zip

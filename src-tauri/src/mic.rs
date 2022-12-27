@@ -19,7 +19,7 @@ fn get_volume_i16(input: &[i16]) -> f64 {
 
 fn get_volume_f32(input: &[f32]) -> f64 {
     let mut volume = 0.0;
-    let mut n_samples = input.len() as f64;
+    let n_samples = input.len() as f64;
     for &sample in input.iter() {
         let curr_sample = sample as f64;
         volume += curr_sample * curr_sample;
@@ -27,6 +27,10 @@ fn get_volume_f32(input: &[f32]) -> f64 {
 
     volume /= n_samples;
     volume = volume.sqrt();
+
+    if cfg!(windows) {
+        volume *= 200.0;
+    }
 
     return volume;
 }
