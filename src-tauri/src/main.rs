@@ -128,7 +128,7 @@ fn grab_camera_frames(
         resize(&frame, &mut resized, Size{width: frame_state.width as i32, height: frame_state.height as i32}, 0.0, 0.0, INTER_LINEAR);
 
         // 2. detect circles
-        let keypoints = detect_circles(&frame, &mut frame_state.detector);
+        let keypoints = detect_circles(&resized, &mut frame_state.detector);
 
         // 3. draw detected circles 
         let color = VecN([255.0, 0.0, 0.0, 0.0]);
