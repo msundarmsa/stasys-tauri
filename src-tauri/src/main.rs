@@ -22,6 +22,8 @@ mod thread;
 use thread::Thread;
 mod settings;
 use settings::{display_camera_feed, display_volume};
+mod shoot;
+use shoot::grab_shoot_frames;
 
 struct ManagedAppState(Mutex<AppState>);
 #[derive(Default)]
@@ -29,6 +31,54 @@ struct AppState {
     camera_thread: Option<Thread<()>>,
     tx_threshs: Option<Sender<(u32, u32)>>,
     mic_thread: Option<Thread<()>>
+}
+
+#[tauri::command]
+fn start_shoot(
+    camera_label: String,
+    mic_label: String,
+    calibrate_point: [f64; 2],
+    fine_adjust: [f64; 2],
+    min_thresh: u32,
+    max_thresh: u32,
+    window: Window,
+    state: State<ManagedAppState>,
+) {
+    // lock mutex to get value
+    let mut curr_state = state.0.lock().unwrap();
+
+    // start thread to grab camera
+    let (camera_tx, camera_rx) = channel();
+    let handle = spawn(move || grab_shoot_frames(
+        camera_label,
+        calibrate_point,
+        fine_adjust,
+        min_thresh,
+        max_thresh,
+        false,
+        window,
+        camera_rx,
+    ));
+    let name = "grab_shoot_frames".to_string();
+    curr_state.camera_thread = Some(Thread{name, handle, tx: camera_tx});
+
+    // remove lock
+    drop(curr_state);
+}
+
+#[tauri::command]
+fn stop_shoot(state: State<ManagedAppState>) {
+    // lock mutex to get value
+    let mut curr_state = state.0.lock().unwrap();
+    
+    if curr_state.camera_thread.is_some() {
+        // stop grab frame thread
+        curr_state.camera_thread.take().unwrap().terminate();
+        curr_state.camera_thread = None;
+    }
+
+    // remove lock
+    drop(curr_state);
 }
 
 #[tauri::command]
@@ -51,7 +101,7 @@ fn settings_choose_camera(
     // start thread to grab camera
     let (tx, rx) = channel();
     let handle = spawn(move || display_camera_feed(label, width, height, min_thresh, max_thresh, window, rx, rx_threshs));
-    let name = "grab_camera_frame".to_string();
+    let name = "display_camera_feed".to_string();
     curr_state.camera_thread = Some(Thread{name, handle, tx});
 
     // remove lock
@@ -104,7 +154,7 @@ fn settings_choose_mic(
     // start thread to grab camera
     let (tx, rx) = channel();
     let handle = spawn(move || display_volume(label, window, rx));
-    let name = "grab_frame_thread".to_string();
+    let name = "display_volume".to_string();
     curr_state.mic_thread = Some(Thread{name, handle, tx});
 
     // remove lock
@@ -148,7 +198,7 @@ fn main() {
 
     tauri::Builder::default()
         .manage(ManagedAppState(Default::default()))
-        .invoke_handler(tauri::generate_handler![settings_choose_camera, settings_close_camera, settings_choose_mic, settings_close_mic, settings_threshs_changed])
+        .invoke_handler(tauri::generate_handler![settings_choose_camera, settings_close_camera, settings_choose_mic, settings_close_mic, settings_threshs_changed, start_shoot])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

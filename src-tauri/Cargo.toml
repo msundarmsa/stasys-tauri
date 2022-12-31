@@ -24,6 +24,7 @@ log = "0.4.17"
 opencv = "0.70.0"
 cpal = "0.14.2"
 anyhow = "1.0"
+cubic-splines = "0.2.0"
 
 [features]
 # by default Tauri runs in production mode

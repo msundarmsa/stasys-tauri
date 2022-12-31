@@ -12,22 +12,8 @@ use std::time::Instant;
 
 use crate::camera::camera_stream;
 use crate::mic::mic_stream;
-
-fn detect_circles(frame: &Mat, detector: &mut Ptr<SimpleBlobDetector>) -> Vector<KeyPoint> {
-    // if frame is not grayscale, convert it
-    let mut gray_frame = Mat::default();
-    if frame.channels() == 3 {
-        cvt_color(&frame, &mut gray_frame, opencv::imgproc::COLOR_RGB2GRAY, 0);
-    }
-  
-    let mut blurred_frame = Mat::default();
-    gaussian_blur(&gray_frame, &mut blurred_frame, Size{width: 9, height: 9}, 0.0, 0.0, BORDER_DEFAULT);
-
-    let mut keypoints = Vector::new();
-    detector.detect(&blurred_frame, &mut keypoints, &no_array());
-
-    return keypoints;
-}
+use crate::shoot::detect_circles;
+use crate::shoot::crop_frame;
 
 pub fn display_volume(
     label: String,
@@ -95,9 +81,9 @@ pub fn display_camera_feed(
     params.min_inertia_ratio = 0.85;
     let detector = SimpleBlobDetector::create(params).unwrap();
     let frame_state = FrameState{ frame_index, width, height, window, rx_threshs, start_time, prev_frame_time, params, detector };
-    let grab_frame = |mat: Mat, frame_state: &mut FrameState| {
+    let grab_frame = |frame: Mat, frame_state: &mut FrameState| {
         if frame_state.frame_index == 0 {
-            info!("Reading frames. Input: {:} x {:}. Output: {:} x {:}", mat.cols(), mat.rows(), frame_state.width, frame_state.height);
+            info!("Reading frames. Input: {:} x {:}. Output: {:} x {:}", frame.cols(), frame.rows(), frame_state.width, frame_state.height);
         } else if frame_state.prev_frame_time.elapsed().as_secs_f64() < 0.03 {
             // only process at 30fps for output to UI
             return
@@ -120,24 +106,25 @@ pub fn display_camera_feed(
         }
 
         // image processing pipeline
-        let frame = mat.clone();
+        // 1. crop frame (TODO: remove)
+        let mut cropped_frame = crop_frame(&frame, [frame.cols() as f64 / 2.0 + 50.0, frame.rows() as f64 / 2.0 + 50.0]);
 
-        // 1. resize frame
-        let mut resized = Mat::default();
-        resize(&frame, &mut resized, Size{width: frame_state.width as i32, height: frame_state.height as i32}, 0.0, 0.0, INTER_LINEAR);
+        // 3. detect circles
+        let keypoints = detect_circles(&cropped_frame, &mut frame_state.detector);
 
-        // 2. detect circles
-        let keypoints = detect_circles(&resized, &mut frame_state.detector);
-
-        // 3. draw detected circles 
+        // 4. draw detected circles 
         let color = VecN([255.0, 0.0, 0.0, 0.0]);
         for keypoint in keypoints {
             let center = Point{x: keypoint.pt.x as i32, y: keypoint.pt.y as i32};
             let radius = (keypoint.size / 2.0) as i32;
-            circle(&mut resized, center, radius, color, FILLED, LINE_8, 0);
+            circle(&mut cropped_frame, center, radius, color, FILLED, LINE_8, 0);
         } 
 
-        // 4. convert RGB to RGBA for displaying to canvas
+        // 5. resize frame to output
+        let mut resized = Mat::default();
+        resize(&cropped_frame, &mut resized, Size{width: frame_state.width as i32, height: frame_state.height as i32}, 0.0, 0.0, INTER_LINEAR);
+
+        // 5. convert RGB to RGBA for displaying to canvas
         let mut output = Mat::default();
         cvt_color(&resized, &mut output, opencv::imgproc::COLOR_RGB2RGBA, 0);
         let data = match output.data_bytes() {

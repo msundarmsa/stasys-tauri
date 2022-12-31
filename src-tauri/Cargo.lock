@@ -630,6 +630,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b365fabc795046672053e29c954733ec3b05e4be654ab130fe8f1f94d7051f35"
 
 [[package]]
+name = "cubic-splines"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0caedc098044c25e759545705f9f333f1cf6502d4c49d793daf4a8f3546cc5d8"
+dependencies = [
+ "roots",
+]
+
+[[package]]
 name = "cxx"
 version = "1.0.79"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2676,6 +2685,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "roots"
+version = "0.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "84348444bd7ad45729d0c49a4240d7cdc11c9d512c06c5ad1835c1ad4acda6db"
+
+[[package]]
 name = "rustc-hash"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3091,6 +3106,7 @@ dependencies = [
  "anyhow",
  "base64",
  "cpal",
+ "cubic-splines",
  "ffmpeg-next",
  "log",
  "log4rs",
