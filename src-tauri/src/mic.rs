@@ -5,7 +5,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
 fn get_volume_i16(input: &[i16]) -> f64 {
     let mut volume = 0.0;
-    let mut n_samples = input.len() as f64;
+    let n_samples = input.len() as f64;
     for &sample in input.iter() {
         let curr_sample = sample as f64;
         volume += curr_sample * curr_sample;
