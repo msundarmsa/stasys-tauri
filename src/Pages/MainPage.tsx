@@ -1,8 +1,11 @@
 import { Alert, AlertColor, AppBar, Box, Button, IconButton, Modal, Snackbar, Toolbar, Typography } from "@mui/material";
 import SettingsIcon from "@mui/icons-material/Settings";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import SettingsPage from "./SettingsPage";
 import { listen } from '@tauri-apps/api/event';
+import { Target } from "./components/Target";
+import { Shot, TARGET_SIZE } from "../ShotUtils";
+import ScoreStatCard from "./components/ScoreStatCard";
 
 export default function MainPage() {
   // settings modal
@@ -22,6 +25,19 @@ export default function MainPage() {
     handleToastOpen();
   };
 
+  // target and zoomed target
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [shots, setShots] = useState<Shot[]>([]);
+  const [shotGroups, setShotGroups] = useState<Shot[][]>([]);
+  const [allShots, setAllShots] = useState<Shot[]>([]);
+  const [shot, setShot] = useState<Shot>();
+  const [shotPoint, setShotPoint] = useState<[number, number]>();
+  const [prevBefore, setPrevBefore] = useState<[number, number]>();
+  const [prevAfter, setPrevAfter] = useState<[number, number]>();
+  const [beforeTrace, setBeforeTrace] = useState<[number, number]>();
+  const [afterTrace, setAfterTrace] = useState<[number, number]>();
+  const [data, setData] = useState<{ x: number; y: number }[][]>([]);
+
   // user options
   const [webcams, setWebcams] = useState<string[]>([]);
   const [mics, setMics] = useState<string[]>([]);
@@ -33,6 +49,56 @@ export default function MainPage() {
   // buttons
   const [calibrateStarted, setCalibrateStarted] = useState(false);
   const [shootStarted, setShootStarted] = useState(false);
+
+  const incrFineAdjust = (x: number, y: number) => {
+      // TODO: increment fine adjust
+      // electron.ipcRenderer.sendMsgOnChannel("camera-render-channel",
+      //   { cmd: "INCR_FINE_ADJUST", fineAdjust: {x: x, y: y} });
+  }
+
+  const [fineAdjustment, setFineAdjustment] = useState<number[]>([-1, -1]);
+  const [fineAdjustmentStarted, setFineAdjustmentStarted] = useState(false);
+  const [fineAdjustmentStart, setFineAdjustmentStart] = useState<number[]>([-1, -1]);
+  const [showAdjustment, setShowAdjustment] = useState(false);
+
+  const handleFineAdjustmentStart = (e: React.MouseEvent<SVGCircleElement>) => {
+    if (calibrateStarted) {
+      showToast("error", "Please wait for calibration to finish or stop calibration. Before adjusting shot.");
+      return;
+    }
+    if (shootStarted) {
+      showToast("error", "Please wait for shooting to finish or stop shooting. Before adjusting shot.");
+      return;
+    }
+
+    setShowAdjustment(true);
+    setFineAdjustment([e.currentTarget.cx.baseVal.value, e.currentTarget.cy.baseVal.value]);
+    setFineAdjustmentStart([e.currentTarget.cx.baseVal.value, e.currentTarget.cy.baseVal.value]);
+    setFineAdjustmentStarted(true);
+  };
+
+  const handleFineAdjustmentMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (fineAdjustmentStarted) {
+      setFineAdjustment([e.nativeEvent.offsetX, e.nativeEvent.offsetY]);
+    }
+  };
+
+  const handleFineAdjustmentEnd = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (fineAdjustmentStarted) {
+      setFineAdjustment([e.nativeEvent.offsetX, e.nativeEvent.offsetY]);
+      setFineAdjustmentStarted(false);
+
+      const distX = e.nativeEvent.offsetX - fineAdjustmentStart[0];
+      const distY = fineAdjustmentStart[1] - e.nativeEvent.offsetY;
+
+      if (canvasRef.current) {
+        incrFineAdjust(
+          2 * distX / canvasRef.current?.width * TARGET_SIZE,
+          2 * distY / canvasRef.current?.height * TARGET_SIZE
+        );
+      }
+    }
+  };
 
   const testClick = () => {
     showToast("error", "Test button not implemented");
@@ -203,6 +269,71 @@ export default function MainPage() {
           </Button>
         </Toolbar>
       </AppBar>
+      <div
+        style={{
+          flex: "1 1 auto",
+          display: "flex",
+          gap: "10px",
+          margin: "10px",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            flex: "0 0 45%",
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+          }}
+        >
+          <div
+            style={{
+              flex: "90%",
+              border: shootStarted ? "1px solid #D7EC58" : calibrateStarted ? "1px solid #51D6FF" : "1px solid #FF4242",
+              borderRadius: "25px",
+              overflow: "hidden",
+            }}
+          >
+            <Target
+              shots={shots}
+              shotPoint={shotPoint}
+              prevBefore={prevBefore}
+              prevAfter={prevAfter}
+              setPrevBefore={setPrevBefore}
+              setPrevAfter={setPrevAfter}
+              newBefore={beforeTrace}
+              newAfter={afterTrace}
+              canvasRef={canvasRef}
+              handleFineAdjustmentStart={handleFineAdjustmentStart}
+              handleFineAdjustmentMove={handleFineAdjustmentMove}
+              handleFineAdjustmentEnd={handleFineAdjustmentEnd}
+              fineAdjustment={fineAdjustment}
+              fineAdjustmentStart={fineAdjustmentStart}
+              showAdjustment={showAdjustment}
+            />
+          </div>
+          <div style={{ flex: "10%", display: "flex" }}>
+            <ScoreStatCard
+              scoreStatType="STABILITY"
+              scoreStat={shot ? shot.stab : 0}
+              dp={0}
+              suffix="%"
+            />
+            <ScoreStatCard
+              scoreStatType="DESCENT TIME"
+              scoreStat={shot ? shot.desc : 0}
+              dp={1}
+              suffix="s"
+            />
+            <ScoreStatCard
+              scoreStatType="AIM TIME"
+              scoreStat={shot ? shot.aim : 0}
+              dp={1}
+              suffix="s"
+            />
+          </div>
+        </div>
+      </div>
       <Snackbar
         open={toastOpen}
         autoHideDuration={5000}
