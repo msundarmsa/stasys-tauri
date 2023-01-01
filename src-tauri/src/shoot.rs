@@ -1,6 +1,6 @@
 extern crate ffmpeg_next as ffmpeg;
 
-use log::error;
+use log::{error, info};
 use opencv::core::{Size, BORDER_DEFAULT, Vector, KeyPoint, no_array, Ptr, Rect};
 use opencv::features2d::{SimpleBlobDetector, SimpleBlobDetector_Params};
 use opencv::imgproc::{cvt_color, gaussian_blur};
@@ -109,7 +109,7 @@ pub fn grab_shoot_frames(
     struct TracePoint {
         x: f64,
         y: f64,
-        time_since_shot_start: f64,
+        time: f64, // time since shot start
     }
 
     // define and initialize frame state
@@ -187,18 +187,18 @@ pub fn grab_shoot_frames(
                     frame_state.shot_start_time = curr_time;
                 } else if
                     frame_state.shot_point.is_some() &&
-                    time_since_shot_start - frame_state.shot_point.unwrap().time_since_shot_start >= 1.0
+                    time_since_shot_start - frame_state.shot_point.unwrap().time >= 1.0
                 {
                     // 1s after trigger is pulled, shot is finished. create new object for this shot
                     // and draw the x-t and y-t graph
                     let mut before_trace: Vec<TracePoint> = Vec::new();
                     for trace_point in &frame_state.before_trace {
-                        before_trace.push(TracePoint { x: trace_point.x, y: trace_point.y, time_since_shot_start: trace_point.time_since_shot_start });
+                        before_trace.push(TracePoint { x: trace_point.x, y: trace_point.y, time: trace_point.time });
                     }
 
                     let mut after_trace: Vec<TracePoint> = Vec::new();
                     for trace_point in &frame_state.after_trace {
-                        after_trace.push(TracePoint { x: trace_point.x, y: trace_point.y, time_since_shot_start: trace_point.time_since_shot_start });
+                        after_trace.push(TracePoint { x: trace_point.x, y: trace_point.y, time: trace_point.time });
                     }
 
                     #[derive(Serialize, Clone)]
@@ -209,9 +209,9 @@ pub fn grab_shoot_frames(
                     }
                     frame_state.window
                         .emit("shot_finished", Payload {
-                            before_trace: before_trace,
+                            before_trace,
                             shot_point: frame_state.shot_point.unwrap(),
-                            after_trace: after_trace
+                            after_trace
                         })
                         .unwrap();
 
@@ -226,7 +226,10 @@ pub fn grab_shoot_frames(
             }
         }
 
-        let cropped_frame = crop_frame(&frame, frame_state.calibrate_point);
+        // 1. crop frame (TODO: remove)
+        // let cropped_frame = crop_frame(&frame, [540.0, 440.0]);
+        let cropped_frame = crop_frame(&frame, [frame.cols() as f64 / 2.0, frame.rows() as f64 / 2.0]);
+        // let cropped_frame = crop_frame(&frame, frame_state.calibrate_point);
         let keypoints = detect_circles(&cropped_frame, &mut frame_state.detector);
         let detected_circle = keypoints.len() == 1;
 
@@ -237,13 +240,14 @@ pub fn grab_shoot_frames(
 
             // aim i.e. black circle was found
             // flip & rotate the x, y to fit camera
-            let x = (-circle.pt.y as f64 + frame.rows() as f64 / 2.0) * RATIO1 + frame_state.fine_adjust[0];
-            let y = (circle.pt.x as f64 - frame.cols() as f64 / 2.0) * RATIO1 + frame_state.fine_adjust[1];
+            let x = (-circle.pt.y as f64 + cropped_frame.rows() as f64 / 2.0) * RATIO1 + frame_state.fine_adjust[0];
+            let y = (circle.pt.x as f64 - cropped_frame.cols() as f64 / 2.0) * RATIO1 + frame_state.fine_adjust[1];
             let center = TracePoint{
                 x,
                 y,
-                time_since_shot_start: curr_time.duration_since(frame_state.shot_start_time).as_secs_f64(),
+                time: curr_time.duration_since(frame_state.shot_start_time).as_secs_f64(),
             };
+            info!("Detected circle (px): {:}, {:}. Position (mm): {:}, {:}", circle.pt.x, circle.pt.y, center.x, center.y);
 
             if x >= -TARGET_SIZE / 2.0 &&
                x <= TARGET_SIZE / 2.0 &&
@@ -289,86 +293,86 @@ pub fn grab_shoot_frames(
                         .unwrap();
 
                     frame_state.shot_start_time = curr_time;
-                } else {
-                    if frame_state.shot_point.is_none() {
-                        if frame_state.trigger_time.is_none() {
-                            // trigger has just been pulled
-                            if frame_state.trigger_time.unwrap() > curr_time {
-                                // trigger was after frame was taken
-                                // add current position to before trace
-                                frame_state.before_trace.push(center);
-                                
-                                frame_state.window
-                                    .emit("add_before", center)
-                                    .unwrap();
-                            } else {
-                                // trigger was before frame was taken
-                                // add current position to after trace
-                                frame_state.after_trace.push(center);
-
-                                frame_state.window
-                                    .emit("add_after", center)
-                                    .unwrap();
-                            }
-                            frame_state.shot_point = Some(center);
-                        } else {
+                } 
+            } else {
+                if frame_state.shot_point.is_none() {
+                    if frame_state.trigger_time.is_some() {
+                        // trigger has just been pulled
+                        if frame_state.trigger_time.unwrap() > curr_time {
+                            // trigger was after frame was taken
+                            // add current position to before trace
                             frame_state.before_trace.push(center);
-
+                            
                             frame_state.window
                                 .emit("add_before", center)
                                 .unwrap();
-                        }
-                    } else {
-                        if frame_state.after_trace.len() < 2 {
-                            frame_state.after_trace.push(center);
-                        } else if frame_state.after_trace.len() == 2 {
-                            frame_state.after_trace.push(center);
-
-                            let mut t_x = Vec::new();
-                            let mut t_y = Vec::new();
-                            for i in frame_state.before_trace.len() - 3..frame_state.before_trace.len() {
-                                let time = frame_state.before_trace[i].time_since_shot_start;
-                                t_x.push((frame_state.before_trace[i].x, time));
-                                t_y.push((frame_state.before_trace[i].y, time));
-                            }
-
-                            for i in 0..3 {
-                                let time = frame_state.after_trace[i].time_since_shot_start;
-                                t_x.push((frame_state.after_trace[i].x, time));
-                                t_y.push((frame_state.after_trace[i].y, time));
-                            }
-
-                            let sx = Spline::new(t_x, BoundaryCondition::Natural);
-                            let sy = Spline::new(t_y, BoundaryCondition::Natural);
-
-                            let trigger_time_from_shot_start = frame_state.trigger_time.unwrap().duration_since(frame_state.shot_start_time).as_secs_f64();
-                            let interp_x = sx.eval(trigger_time_from_shot_start);
-                            let interp_y = sy.eval(trigger_time_from_shot_start);
-
-                            let shot_point = TracePoint {
-                                x: interp_x,
-                                y: interp_y,
-                                time_since_shot_start: trigger_time_from_shot_start,
-                            };
-                            frame_state.shot_point = Some(shot_point);
-
-                            frame_state.window
-                                .emit("add_before", shot_point)
-                                .unwrap();
-                            frame_state.window
-                                .emit("add_after", shot_point)
-                                .unwrap();
-                            frame_state.window
-                                .emit("add_shot", shot_point)
-                                .unwrap();
-
-                            frame_state.trigger_time = None;
                         } else {
+                            // trigger was before frame was taken
+                            // add current position to after trace
                             frame_state.after_trace.push(center);
+
                             frame_state.window
                                 .emit("add_after", center)
                                 .unwrap();
                         }
+                        frame_state.shot_point = Some(center);
+                    } else {
+                        frame_state.before_trace.push(center);
+
+                        frame_state.window
+                            .emit("add_before", center)
+                            .unwrap();
+                    }
+                } else {
+                    if frame_state.after_trace.len() < 2 {
+                        frame_state.after_trace.push(center);
+                    } else if frame_state.after_trace.len() == 2 {
+                        frame_state.after_trace.push(center);
+
+                        let mut t_x = Vec::new();
+                        let mut t_y = Vec::new();
+                        for i in frame_state.before_trace.len() - 3..frame_state.before_trace.len() {
+                            let time = frame_state.before_trace[i].time;
+                            t_x.push((frame_state.before_trace[i].x, time));
+                            t_y.push((frame_state.before_trace[i].y, time));
+                        }
+
+                        for i in 0..3 {
+                            let time = frame_state.after_trace[i].time;
+                            t_x.push((frame_state.after_trace[i].x, time));
+                            t_y.push((frame_state.after_trace[i].y, time));
+                        }
+
+                        let sx = Spline::new(t_x, BoundaryCondition::Natural);
+                        let sy = Spline::new(t_y, BoundaryCondition::Natural);
+
+                        let trigger_time_from_shot_start = frame_state.trigger_time.unwrap().duration_since(frame_state.shot_start_time).as_secs_f64();
+                        let interp_x = sx.eval(trigger_time_from_shot_start);
+                        let interp_y = sy.eval(trigger_time_from_shot_start);
+
+                        let shot_point = TracePoint {
+                            x: interp_x,
+                            y: interp_y,
+                            time: trigger_time_from_shot_start,
+                        };
+                        frame_state.shot_point = Some(shot_point);
+
+                        frame_state.window
+                            .emit("add_before", shot_point)
+                            .unwrap();
+                        frame_state.window
+                            .emit("add_after", shot_point)
+                            .unwrap();
+                        frame_state.window
+                            .emit("add_shot", shot_point)
+                            .unwrap();
+
+                        frame_state.trigger_time = None;
+                    } else {
+                        frame_state.after_trace.push(center);
+                        frame_state.window
+                            .emit("add_after", center)
+                            .unwrap();
                     }
                 }
             }

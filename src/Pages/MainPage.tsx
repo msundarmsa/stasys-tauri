@@ -2,10 +2,13 @@ import { Alert, AlertColor, AppBar, Box, Button, IconButton, Modal, Snackbar, To
 import SettingsIcon from "@mui/icons-material/Settings";
 import { useEffect, useRef, useState } from "react";
 import SettingsPage from "./SettingsPage";
-import { listen } from '@tauri-apps/api/event';
+import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { Target } from "./components/Target";
-import { Shot, TARGET_SIZE } from "../ShotUtils";
+import { Shot, TARGET_SIZE, TracePoint, updateShot } from "../ShotUtils";
 import ScoreStatCard from "./components/ScoreStatCard";
+import { invoke } from "@tauri-apps/api/tauri";
+
+var unlistens: UnlistenFn[] = [];
 
 export default function MainPage() {
   // settings modal
@@ -56,6 +59,7 @@ export default function MainPage() {
       //   { cmd: "INCR_FINE_ADJUST", fineAdjust: {x: x, y: y} });
   }
 
+  const [calibratePoint, setCalibratePoint] = useState<number[]>([0, 0]);
   const [fineAdjustment, setFineAdjustment] = useState<number[]>([-1, -1]);
   const [fineAdjustmentStarted, setFineAdjustmentStarted] = useState(false);
   const [fineAdjustmentStart, setFineAdjustmentStart] = useState<number[]>([-1, -1]);
@@ -100,12 +104,189 @@ export default function MainPage() {
     }
   };
 
+  const clearTrace = () => {
+    if (canvasRef.current) {
+      const context = canvasRef.current.getContext("2d");
+      if (context) {
+        context.clearRect(
+          0,
+          0,
+          canvasRef.current.width,
+          canvasRef.current.height
+        );
+      }
+    }
+
+    setPrevBefore(undefined);
+    setPrevAfter(undefined);
+  };
+
+  const startShoot = (testState?: {testShotPoint: [number, number], testShots: Shot[], testShotGroups: Shot[][], allTestShots: Shot[] }) => {
+    let args = {
+      cameraLabel: cameraId,
+      micLabel: micId,
+      calibratePoint: calibratePoint,
+      fineAdjust: fineAdjustment,
+      minThresh: cameraThreshs[0],
+      maxThresh: cameraThreshs[1]
+    };
+    invoke('start_shoot', args);
+
+    let currShotPoint = shotPoint;
+    let currShots = shots;
+    let currAllShots = allShots;
+    let currShotGroups = shotGroups;
+    if (testState) {
+      currShotPoint = testState.testShotPoint;
+      currShots = testState.testShots;
+      currAllShots = testState.allTestShots;
+      currShotGroups = testState.testShotGroups;
+    }
+
+    listen('clear_trace', (_) => {
+        clearTrace();
+    }).then(unlisten => {
+      unlistens.push(unlisten);
+    });
+
+    listen('add_before', (event) => {
+      let center = event.payload as TracePoint;
+      console.log(event.payload);
+      console.log("add_before called {:}", center.x, center.y);
+      setBeforeTrace([center.x, center.y]);
+    }).then(unlisten => {
+      unlistens.push(unlisten);
+    });
+
+    listen('add_after', (event) => {
+      let center = event.payload as TracePoint;
+      setAfterTrace([center.x, center.y]);
+    }).then(unlisten => {
+      unlistens.push(unlisten);
+    });
+
+    listen('add_shot', (event) => {
+      let center = event.payload as TracePoint;
+      currShotPoint = [center.x, center.y];
+      setShotPoint(currShotPoint);
+      if (currShots.length == 10) {
+        currShotGroups = [currShots, ...currShotGroups];
+        currShots = [];
+        setShotGroups(currShotGroups);
+        setShots(currShots);
+      }
+    }).then(unlisten => {
+      unlistens.push(unlisten);
+    });
+
+    listen('shot_finished', (event) => {
+      // parse args
+      interface PayLoad {
+        before_trace: TracePoint[];
+        shot_point: TracePoint;
+        after_trace: TracePoint[];
+      }
+      let args = event.payload as PayLoad;
+      let beforeTrace = args.before_trace;
+      let shotPoint = args.shot_point;
+      let afterTrace = args.after_trace;
+      let shotTime = shotPoint.time;
+
+      const shotId = currAllShots.length > 0 ? currAllShots[0].id + 1 : 1;
+      if (currShotPoint) {
+        const shot: Shot = {
+          id: shotId,
+          score: -1,
+          x: currShotPoint[0],
+          y: currShotPoint[1],
+          r: -1,
+          angle: -1,
+          direction: "",
+          stab: -1,
+          desc: -1,
+          aim: -1,
+        };
+
+        currAllShots = [shot, ...currAllShots];
+        currShots = [shot, ...currShots];
+
+        updateShot(shot, beforeTrace);
+        setAllShots(currAllShots);
+        setShot(shot);
+        setShots(currShots);
+
+        // cut the traces from +-0.5s (500ms) around shot
+        const xData: { x: number; y: number }[] = [];
+        const yData: { x: number; y: number }[] = [];
+        let idx = beforeTrace.length - 1;
+        while (idx >= 0) {
+          const currTP = beforeTrace[idx];
+          if (shotTime - currTP.time > 5) {
+            break;
+          }
+
+          const currTime = currTP.time - shotTime;
+          const currX = beforeTrace[idx].x;
+          const currY = beforeTrace[idx].y;
+          xData.push({ x: currTime, y: currX });
+          yData.push({ x: currTime, y: currY });
+
+          idx -= 1;
+        }
+        xData.reverse();
+        yData.reverse();
+        idx = 0;
+        while (idx <= afterTrace.length - 1) {
+          const currTP = afterTrace[idx];
+          if (currTP.time - shotTime > 5) {
+            break;
+          }
+
+          const currTime = currTP.time - shotTime;
+          const currX = afterTrace[idx].x;
+          const currY = afterTrace[idx].y;
+          xData.push({ x: currTime, y: currX });
+          yData.push({ x: currTime, y: currY });
+
+          idx += 1;
+        }
+
+        setData([xData, yData]);
+      }
+    }).then(unlisten => {
+      unlistens.push(unlisten);
+    });
+  };
+
+  const stopShoot = () => {
+    // send stop signal to tauri backend
+    invoke('stop_shoot');
+  };
+
   const testClick = () => {
     showToast("error", "Test button not implemented");
   };
 
   const shootClick = () => {
-    showToast("error", "Shoot button not implemented");
+    if (calibrateStarted) {
+      showToast("error", "Please wait for calibration to finish");
+      return;
+    }
+
+    setShowAdjustment(false);
+
+    if (shootStarted) {
+      stopShoot();
+      setShootStarted(false);
+      clearTrace();
+    } else {
+      if (cameraId == "" || micId == "") {
+        showToast("error", "No camera/mic found!");
+        return;
+      }
+      startShoot();
+      setShootStarted(true);
+    }
   };
 
   const calibrateClick = () => {
@@ -116,7 +297,19 @@ export default function MainPage() {
     chooseDefaultCameraAndMic();
     listen('show_message', (event) => {
       showToast("info", event.payload as string);
+    }).then(unlisten => {
+      unlistens.push(unlisten);
     });
+
+    return () => {
+      // stop running threads
+      stopShoot();
+      // stopCalibrate();
+
+      // stop listening on events
+      unlistens.forEach(unlisten => unlisten());
+      unlistens = [];
+    }
   }, []);
 
   async function chooseDefaultCameraAndMic() {

@@ -2,9 +2,9 @@ extern crate ffmpeg_next as ffmpeg;
 
 use base64::encode;
 use log::{info, error};
-use opencv::core::{Point, VecN, Size, BORDER_DEFAULT, Vector, KeyPoint, no_array, Ptr};
+use opencv::core::{Point, VecN, Size, Ptr};
 use opencv::features2d::{SimpleBlobDetector, SimpleBlobDetector_Params};
-use opencv::imgproc::{cvt_color, circle, LINE_8, FILLED, resize, INTER_LINEAR, gaussian_blur};
+use opencv::imgproc::{cvt_color, circle, LINE_8, FILLED, resize, INTER_LINEAR};
 use opencv::prelude::*;
 use tauri::Window;
 use std::sync::mpsc::Receiver;
@@ -107,7 +107,8 @@ pub fn display_camera_feed(
 
         // image processing pipeline
         // 1. crop frame (TODO: remove)
-        let mut cropped_frame = crop_frame(&frame, [frame.cols() as f64 / 2.0 + 50.0, frame.rows() as f64 / 2.0 + 50.0]);
+        // let mut cropped_frame = crop_frame(&frame, [540.0, 440.0]);
+        let mut cropped_frame = crop_frame(&frame, [frame.cols() as f64 / 2.0, frame.rows() as f64 / 2.0]);
 
         // 3. detect circles
         let keypoints = detect_circles(&cropped_frame, &mut frame_state.detector);
@@ -119,6 +120,9 @@ pub fn display_camera_feed(
             let radius = (keypoint.size / 2.0) as i32;
             circle(&mut cropped_frame, center, radius, color, FILLED, LINE_8, 0);
         } 
+        let center_x = cropped_frame.cols() / 2;
+        let center_y = cropped_frame.rows() / 2;
+        circle(&mut cropped_frame, Point{x: center_x, y: center_y}, 10, VecN([0.0, 255.0, 0.0, 0.0]), FILLED, LINE_8, 0);
 
         // 5. resize frame to output
         let mut resized = Mat::default();

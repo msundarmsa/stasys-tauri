@@ -127,10 +127,10 @@ export const toDP = (x: number, dp: number) => {
 export interface Shot {
   id: number;
   score: number;
-  x: number;
-  y: number;
-  r: number;
-  angle: number;
+  x: number; // cartesian
+  y: number; // cartesian
+  r: number; // polar
+  angle: number; // polar
   direction: string;
   stab: number;
   desc: number;
@@ -140,6 +140,5 @@ export interface Shot {
 export interface TracePoint {
   x: number;
   y: number;
-  r: number;
   time: number;
 }

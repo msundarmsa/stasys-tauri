@@ -198,7 +198,7 @@ fn main() {
 
     tauri::Builder::default()
         .manage(ManagedAppState(Default::default()))
-        .invoke_handler(tauri::generate_handler![settings_choose_camera, settings_close_camera, settings_choose_mic, settings_close_mic, settings_threshs_changed, start_shoot])
+        .invoke_handler(tauri::generate_handler![settings_choose_camera, settings_close_camera, settings_choose_mic, settings_close_mic, settings_threshs_changed, start_shoot, stop_shoot])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
