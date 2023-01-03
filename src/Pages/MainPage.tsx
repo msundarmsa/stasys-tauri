@@ -59,10 +59,10 @@ export default function MainPage() {
       //   { cmd: "INCR_FINE_ADJUST", fineAdjust: {x: x, y: y} });
   }
 
-  const [calibratePoint, setCalibratePoint] = useState<number[]>([0, 0]);
-  const [fineAdjustment, setFineAdjustment] = useState<number[]>([-1, -1]);
+  const [calibratePoint, setCalibratePoint] = useState<number[]>([540.0, 440.0]);
+  const [fineAdjustment, setFineAdjustment] = useState<number[]>([0.0, 0.0]);
   const [fineAdjustmentStarted, setFineAdjustmentStarted] = useState(false);
-  const [fineAdjustmentStart, setFineAdjustmentStart] = useState<number[]>([-1, -1]);
+  const [fineAdjustmentStart, setFineAdjustmentStart] = useState<number[]>([0.0, 0.0]);
   const [showAdjustment, setShowAdjustment] = useState(false);
 
   const handleFineAdjustmentStart = (e: React.MouseEvent<SVGCircleElement>) => {
@@ -122,15 +122,18 @@ export default function MainPage() {
   };
 
   const startShoot = (testState?: {testShotPoint: [number, number], testShots: Shot[], testShotGroups: Shot[][], allTestShots: Shot[] }) => {
-    let args = {
+    invoke('start_shoot_video', {
       cameraLabel: cameraId,
-      micLabel: micId,
       calibratePoint: calibratePoint,
       fineAdjust: fineAdjustment,
       minThresh: cameraThreshs[0],
       maxThresh: cameraThreshs[1]
-    };
-    invoke('start_shoot', args);
+    });
+
+    invoke('start_shoot_audio', {
+      micLabel: micId,
+      thresh: micThresh,
+    });
 
     let currShotPoint = shotPoint;
     let currShots = shots;

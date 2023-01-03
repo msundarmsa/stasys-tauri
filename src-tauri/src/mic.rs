@@ -1,4 +1,4 @@
-use std::sync::mpsc::{Receiver, RecvError};
+use std::{sync::mpsc::{Receiver, RecvError, Sender}, time::Instant};
 use log::info;
 use tauri::Window;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -35,7 +35,7 @@ fn get_volume_f32(input: &[f32]) -> f64 {
     return volume;
 }
 
-pub fn mic_stream(label: String, window: Window, rx: Receiver<()>, grab_frame: fn(f64, &Window)) -> Result<(), anyhow::Error> {
+pub fn mic_stream(label: String, window: Window, rx: Receiver<()>, threshold: f64, trigger_tx: Option<Sender<Instant>>, grab_frame: fn(f64, f64, Option<&Sender<Instant>>, &mut Option<Instant>, &Window)) -> Result<(), anyhow::Error> {
     info!("Starting mic {:}", label);
     
     let host = cpal::default_host();
@@ -51,15 +51,17 @@ pub fn mic_stream(label: String, window: Window, rx: Receiver<()>, grab_frame: f
         eprintln!("an error occurred on stream: {}", err);
     };
 
+    let mut last_trigger: Option<Instant> = None;
+
     let stream = match config.sample_format() {
         cpal::SampleFormat::I16 => device.build_input_stream(
             &config.into(),
-            move |data, _: &_| grab_frame(get_volume_i16(data), &window),
+            move |data, _: &_| grab_frame(get_volume_i16(data), threshold, trigger_tx.as_ref(), &mut last_trigger, &window),
             err_fn,
         )?,
         cpal::SampleFormat::F32 => device.build_input_stream(
             &config.into(),
-            move |data, _: &_| grab_frame(get_volume_f32(data), &window),
+            move |data, _: &_| grab_frame(get_volume_f32(data), threshold, trigger_tx.as_ref(), &mut last_trigger, &window),
             err_fn,
         )?,
         sample_format => {

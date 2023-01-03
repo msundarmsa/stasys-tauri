@@ -7,7 +7,7 @@ use opencv::features2d::{SimpleBlobDetector, SimpleBlobDetector_Params};
 use opencv::imgproc::{cvt_color, circle, LINE_8, FILLED, resize, INTER_LINEAR};
 use opencv::prelude::*;
 use tauri::Window;
-use std::sync::mpsc::Receiver;
+use std::sync::mpsc::{Receiver, Sender};
 use std::time::Instant;
 
 use crate::camera::camera_stream;
@@ -19,7 +19,7 @@ pub fn display_volume(
     window: Window,
     rx: Receiver<()>
 ) {
-    let grab_frame = |volume: f64, window: &Window| {
+    let grab_frame = |volume: f64, _threshold: f64, _trigger_tx: Option<&Sender<Instant>>, _last_trigger: &mut Option<Instant>, window: &Window| {
         info!("Received audio frame: {:}", volume);
 
         window
@@ -27,7 +27,7 @@ pub fn display_volume(
             .unwrap();
     };
 
-    match mic_stream(label, window, rx, grab_frame) {
+    match mic_stream(label, window, rx, 0.0, None, grab_frame) {
         Ok(()) => (),
         Err(e) => {
             error!("Could not read frames from mic ({:})", e.to_string());

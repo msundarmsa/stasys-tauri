@@ -15,6 +15,7 @@ use std::env;
 use std::sync::Mutex;
 use std::sync::mpsc::{channel, Sender};
 use std::thread::spawn;
+use std::time::Instant;
 
 mod camera;
 mod mic;
@@ -23,20 +24,49 @@ use thread::Thread;
 mod settings;
 use settings::{display_camera_feed, display_volume};
 mod shoot;
-use shoot::grab_shoot_frames;
+use shoot::{grab_shoot_frames, grab_shoot_mic};
 
 struct ManagedAppState(Mutex<AppState>);
 #[derive(Default)]
 struct AppState {
     camera_thread: Option<Thread<()>>,
-    tx_threshs: Option<Sender<(u32, u32)>>,
-    mic_thread: Option<Thread<()>>
+    threshs_tx: Option<Sender<(u32, u32)>>,
+    mic_thread: Option<Thread<()>>,
+    trigger_tx: Option<Sender<Instant>>
 }
 
 #[tauri::command]
-fn start_shoot(
-    camera_label: String,
+fn start_shoot_audio(
     mic_label: String,
+    thresh: f64,
+    window: Window,
+    state: State<ManagedAppState>
+) {
+    // lock mutex to get value
+    let mut curr_state = state.0.lock().unwrap();
+    let curr_trigger_tx = curr_state.trigger_tx.take();
+
+    // create channels to terminate mic threads and for mic triggers
+    let (tx, rx) = channel();
+
+    // start thread to grab mic 
+    let handle = spawn(move || grab_shoot_mic(
+        mic_label,
+        thresh,
+        window,
+        curr_trigger_tx,
+        rx
+    ));
+    let name = "grab_shoot_mic".to_string();
+    curr_state.mic_thread = Some(Thread{name, handle, tx});
+
+    // remove lock
+    drop(curr_state);
+}
+
+#[tauri::command]
+fn start_shoot_video(
+    camera_label: String,
     calibrate_point: [f64; 2],
     fine_adjust: [f64; 2],
     min_thresh: u32,
@@ -47,20 +77,25 @@ fn start_shoot(
     // lock mutex to get value
     let mut curr_state = state.0.lock().unwrap();
 
+    // create channels to terminate camera and mic threads and for mic triggers
+    let (tx, rx) = channel();
+    let (trigger_tx, trigger_rx) = channel();
+
     // start thread to grab camera
-    let (camera_tx, camera_rx) = channel();
     let handle = spawn(move || grab_shoot_frames(
         camera_label,
         calibrate_point,
         fine_adjust,
         min_thresh,
         max_thresh,
-        false,
+        true,
+        trigger_rx,
         window,
-        camera_rx,
+        rx,
     ));
     let name = "grab_shoot_frames".to_string();
-    curr_state.camera_thread = Some(Thread{name, handle, tx: camera_tx});
+    curr_state.camera_thread = Some(Thread{name, handle, tx});
+    curr_state.trigger_tx = Some(trigger_tx);
 
     // remove lock
     drop(curr_state);
@@ -72,9 +107,15 @@ fn stop_shoot(state: State<ManagedAppState>) {
     let mut curr_state = state.0.lock().unwrap();
     
     if curr_state.camera_thread.is_some() {
-        // stop grab frame thread
+        // stop video thread
         curr_state.camera_thread.take().unwrap().terminate();
         curr_state.camera_thread = None;
+    }
+
+    if curr_state.mic_thread.is_some() {
+        // stop audio thread
+        curr_state.mic_thread.take().unwrap().terminate();
+        curr_state.mic_thread = None;
     }
 
     // remove lock
@@ -96,7 +137,7 @@ fn settings_choose_camera(
     
     // create channel to communicate threshold changes
     let (tx_threshs, rx_threshs) = channel();
-    curr_state.tx_threshs = Some(tx_threshs);
+    curr_state.threshs_tx = Some(tx_threshs);
 
     // start thread to grab camera
     let (tx, rx) = channel();
@@ -119,8 +160,8 @@ fn settings_close_camera(state: State<ManagedAppState>) {
         curr_state.camera_thread = None;
 
         // close threshold changes channel
-        drop(curr_state.tx_threshs.take().unwrap());
-        curr_state.tx_threshs = None;
+        drop(curr_state.threshs_tx.take().unwrap());
+        curr_state.threshs_tx = None;
     }
 
     // remove lock
@@ -132,10 +173,10 @@ fn settings_threshs_changed(min_thresh: u32, max_thresh: u32, state: State<Manag
     // lock mutex to get value
     let mut curr_state = state.0.lock().unwrap();
     
-    if curr_state.tx_threshs.is_some() {
-        let tx_threshs = curr_state.tx_threshs.take().unwrap();
+    if curr_state.threshs_tx.is_some() {
+        let tx_threshs = curr_state.threshs_tx.take().unwrap();
         tx_threshs.send((min_thresh, max_thresh));
-        curr_state.tx_threshs = Some(tx_threshs);
+        curr_state.threshs_tx = Some(tx_threshs);
     }
 
     // remove lock
@@ -198,7 +239,7 @@ fn main() {
 
     tauri::Builder::default()
         .manage(ManagedAppState(Default::default()))
-        .invoke_handler(tauri::generate_handler![settings_choose_camera, settings_close_camera, settings_choose_mic, settings_close_mic, settings_threshs_changed, start_shoot, stop_shoot])
+        .invoke_handler(tauri::generate_handler![settings_choose_camera, settings_close_camera, settings_choose_mic, settings_close_mic, settings_threshs_changed, start_shoot_video, start_shoot_audio, stop_shoot])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

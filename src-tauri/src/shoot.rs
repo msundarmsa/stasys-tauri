@@ -7,8 +7,8 @@ use opencv::imgproc::{cvt_color, gaussian_blur};
 use opencv::prelude::*;
 use serde::Serialize;
 use tauri::Window;
-use std::sync::mpsc::Receiver;
-use std::time::Instant;
+use std::sync::mpsc::{Receiver, Sender};
+use std::time::{Instant, Duration};
 use cubic_splines::{Spline, BoundaryCondition};
 
 use crate::camera::camera_stream;
@@ -52,20 +52,26 @@ pub fn crop_frame(frame: &Mat, calibrate_point: [f64; 2]) -> Mat {
     return Mat::roi(frame, Rect::new(x as i32, y as i32, width as i32, height as i32)).unwrap().clone();
 }
 
-/* pub fn display_volume(
+pub fn grab_shoot_mic(
     label: String,
+    threshold: f64,
     window: Window,
+    trigger_tx: Option<Sender<Instant>>,
     rx: Receiver<()>
 ) {
-    let grab_frame = |volume: f64, window: &Window| {
-        info!("Received audio frame: {:}", volume);
+    let grab_frame = |volume: f64, threshold: f64, trigger_tx: Option<&Sender<Instant>>, last_trigger: &mut Option<Instant>, _window: &Window| {
+        let now = Instant::now();
 
-        window
-            .emit("grab_mic_frame", volume)
-            .unwrap();
+        // trigger is locked for 5s after last trigger
+        let trigger_locked = last_trigger.is_some() && now.duration_since(last_trigger.unwrap()).as_secs_f64() <= 5.0;
+
+        if !trigger_locked && volume > threshold {
+            trigger_tx.unwrap().send(Instant::now());
+            *last_trigger = Some(now);
+        }
     };
 
-    match mic_stream(label, window, rx, grab_frame) {
+    match mic_stream(label, window, rx, threshold, trigger_tx, grab_frame) {
         Ok(()) => (),
         Err(e) => {
             error!("Could not read frames from mic ({:})", e.to_string());
@@ -73,7 +79,7 @@ pub fn crop_frame(frame: &Mat, calibrate_point: [f64; 2]) -> Mat {
             ()
         }
     }
-} */
+}
 
 pub fn get_circle_detector(min_thresh: u32, max_thresh: u32) -> Ptr<SimpleBlobDetector> {
     let mut params = SimpleBlobDetector_Params::default().unwrap();
@@ -102,6 +108,7 @@ pub fn grab_shoot_frames(
     min_thresh: u32,
     max_thresh: u32,
     up_down: bool,
+    trigger_rx: Receiver<Instant>,
     window: Window,
     rx: Receiver<()>,
 ) {
@@ -126,7 +133,8 @@ pub fn grab_shoot_frames(
         fine_adjust: [f64; 2],
         up_down: bool,
         trigger_time: Option<Instant>,
-        detector: Ptr<SimpleBlobDetector>
+        detector: Ptr<SimpleBlobDetector>,
+        trigger_rx: Receiver<Instant>
     }
 
     let frame_index = 0;
@@ -145,7 +153,8 @@ pub fn grab_shoot_frames(
         fine_adjust,
         up_down,
         trigger_time: None,
-        detector
+        detector,
+        trigger_rx
     };
 
     let grab_frame = |frame: Mat, frame_state: &mut FrameState, window: &Window| {
@@ -154,6 +163,14 @@ pub fn grab_shoot_frames(
             0 => 0.0,
             _ => curr_time.duration_since(frame_state.shot_start_time).as_secs_f64()
         };
+
+        match frame_state.trigger_rx.try_recv() {
+            Ok(trigger_time) => {
+                info!("Received trigger");
+                frame_state.trigger_time = Some(trigger_time);
+            }
+            Err(_) => {}
+        }
 
         if frame_state.shot_started {
             // shot has started i.e. the aim has went past the top edge and came back down
@@ -224,10 +241,7 @@ pub fn grab_shoot_frames(
             }
         }
 
-        // 1. crop frame (TODO: remove)
-        // let cropped_frame = crop_frame(&frame, [540.0, 440.0]);
-        let cropped_frame = crop_frame(&frame, [frame.cols() as f64 / 2.0, frame.rows() as f64 / 2.0]);
-        // let cropped_frame = crop_frame(&frame, frame_state.calibrate_point);
+        let cropped_frame = crop_frame(&frame, frame_state.calibrate_point);
         let keypoints = detect_circles(&cropped_frame, &mut frame_state.detector);
         let detected_circle = keypoints.len() == 1;
 
