@@ -7,6 +7,7 @@ use ffmpeg::software::scaling::{context::Context, flag::Flags};
 use ffmpeg::util::frame::video::Video;
 use ffmpeg::{Dictionary, Error};
 use opencv::prelude::*;
+use tauri::Window;
 
 use std::ffi::CString;
 use std::path::Path;
@@ -72,7 +73,7 @@ fn get_camera_input(label: String) -> Result<Input, Error> {
     }
 }
 
-pub fn camera_stream<T>(label: String, rx: Receiver<()>, mut state: T, grab_frame: fn(Mat, &mut T)) -> Result<(), Error> {
+pub fn camera_stream<T>(label: String, rx: Receiver<()>, mut state: T, grab_frame: fn(Mat, &mut T, &Window), window: Window) -> Result<(), Error> {
     info!("Starting camera {:}", label);
     
     let mut input = match get_camera_input(label) {
@@ -134,7 +135,7 @@ pub fn camera_stream<T>(label: String, rx: Receiver<()>, mut state: T, grab_fram
                     }
                 };
 
-                grab_frame(mat, state_ref);
+                grab_frame(mat, state_ref, &window);
             }
         }
 

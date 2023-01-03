@@ -126,7 +126,6 @@ pub fn grab_shoot_frames(
         fine_adjust: [f64; 2],
         up_down: bool,
         trigger_time: Option<Instant>,
-        window: Window,
         detector: Ptr<SimpleBlobDetector>
     }
 
@@ -146,11 +145,10 @@ pub fn grab_shoot_frames(
         fine_adjust,
         up_down,
         trigger_time: None,
-        window,
         detector
     };
 
-    let grab_frame = |frame: Mat, frame_state: &mut FrameState| {
+    let grab_frame = |frame: Mat, frame_state: &mut FrameState, window: &Window| {
         let curr_time = Instant::now();
         let time_since_shot_start = match frame_state.frame_index {
             0 => 0.0,
@@ -168,7 +166,7 @@ pub fn grab_shoot_frames(
                 frame_state.shot_point = None;
                 frame_state.after_trace = Vec::new();
 
-                frame_state.window
+                window
                     .emit("clear_trace", {})
                     .unwrap();
                 // delay_read = 1000 / idle_fps;
@@ -179,7 +177,7 @@ pub fn grab_shoot_frames(
                     frame_state.shot_point = None;
                     frame_state.after_trace = Vec::new();
 
-                    frame_state.window
+                    window
                         .emit("clear_trace", {})
                         .unwrap();
 
@@ -207,7 +205,7 @@ pub fn grab_shoot_frames(
                         shot_point: TracePoint,
                         after_trace: Vec<TracePoint>
                     }
-                    frame_state.window
+                    window
                         .emit("shot_finished", Payload {
                             before_trace,
                             shot_point: frame_state.shot_point.unwrap(),
@@ -288,7 +286,7 @@ pub fn grab_shoot_frames(
                     frame_state.after_trace = Vec::new();
                     frame_state.pre_trace = Vec::new();
 
-                    frame_state.window
+                    window
                         .emit("clear_trace", {})
                         .unwrap();
 
@@ -303,7 +301,7 @@ pub fn grab_shoot_frames(
                             // add current position to before trace
                             frame_state.before_trace.push(center);
                             
-                            frame_state.window
+                            window
                                 .emit("add_before", center)
                                 .unwrap();
                         } else {
@@ -311,7 +309,7 @@ pub fn grab_shoot_frames(
                             // add current position to after trace
                             frame_state.after_trace.push(center);
 
-                            frame_state.window
+                            window
                                 .emit("add_after", center)
                                 .unwrap();
                         }
@@ -319,7 +317,7 @@ pub fn grab_shoot_frames(
                     } else {
                         frame_state.before_trace.push(center);
 
-                        frame_state.window
+                        window
                             .emit("add_before", center)
                             .unwrap();
                     }
@@ -357,20 +355,20 @@ pub fn grab_shoot_frames(
                         };
                         frame_state.shot_point = Some(shot_point);
 
-                        frame_state.window
+                        window
                             .emit("add_before", shot_point)
                             .unwrap();
-                        frame_state.window
+                        window
                             .emit("add_after", shot_point)
                             .unwrap();
-                        frame_state.window
+                        window
                             .emit("add_shot", shot_point)
                             .unwrap();
 
                         frame_state.trigger_time = None;
                     } else {
                         frame_state.after_trace.push(center);
-                        frame_state.window
+                        window
                             .emit("add_after", center)
                             .unwrap();
                     }
@@ -387,7 +385,7 @@ pub fn grab_shoot_frames(
         frame_state.frame_index += 1;
     };
 
-    match camera_stream(label, rx, frame_state, grab_frame) {
+    match camera_stream(label, rx, frame_state, grab_frame, window) {
         Ok(()) => (),
         Err(e) => {
             error!("Could not read frames from camera ({:})", e.to_string());

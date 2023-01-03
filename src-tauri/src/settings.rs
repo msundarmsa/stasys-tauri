@@ -13,7 +13,6 @@ use std::time::Instant;
 use crate::camera::camera_stream;
 use crate::mic::mic_stream;
 use crate::shoot::detect_circles;
-use crate::shoot::crop_frame;
 
 pub fn display_volume(
     label: String,
@@ -52,7 +51,6 @@ pub fn display_camera_feed(
         frame_index: u32,
         width: u32,
         height: u32,
-        window: Window,
         rx_threshs: Receiver<(u32, u32)>,
         start_time: Instant,
         prev_frame_time: Instant,
@@ -80,8 +78,8 @@ pub fn display_camera_feed(
     params.filter_by_inertia = true;
     params.min_inertia_ratio = 0.85;
     let detector = SimpleBlobDetector::create(params).unwrap();
-    let frame_state = FrameState{ frame_index, width, height, window, rx_threshs, start_time, prev_frame_time, params, detector };
-    let grab_frame = |frame: Mat, frame_state: &mut FrameState| {
+    let frame_state = FrameState{ frame_index, width, height, rx_threshs, start_time, prev_frame_time, params, detector };
+    let grab_frame = |frame: Mat, frame_state: &mut FrameState, window: &Window| {
         if frame_state.frame_index == 0 {
             info!("Reading frames. Input: {:} x {:}. Output: {:} x {:}", frame.cols(), frame.rows(), frame_state.width, frame_state.height);
         } else if frame_state.prev_frame_time.elapsed().as_secs_f64() < 0.03 {
@@ -106,27 +104,26 @@ pub fn display_camera_feed(
         }
 
         // image processing pipeline
-        // 1. crop frame (TODO: remove)
-        // let mut cropped_frame = crop_frame(&frame, [540.0, 440.0]);
-        let mut cropped_frame = crop_frame(&frame, [frame.cols() as f64 / 2.0, frame.rows() as f64 / 2.0]);
+        // 1. clone frame to mutable
+        let mut input = frame.clone();
 
-        // 3. detect circles
-        let keypoints = detect_circles(&cropped_frame, &mut frame_state.detector);
+        // 2. detect circles
+        let keypoints = detect_circles(&input, &mut frame_state.detector);
 
-        // 4. draw detected circles 
+        // 3. draw detected circles 
         let color = VecN([255.0, 0.0, 0.0, 0.0]);
         for keypoint in keypoints {
             let center = Point{x: keypoint.pt.x as i32, y: keypoint.pt.y as i32};
             let radius = (keypoint.size / 2.0) as i32;
-            circle(&mut cropped_frame, center, radius, color, FILLED, LINE_8, 0);
+            circle(&mut input, center, radius, color, FILLED, LINE_8, 0);
         } 
-        let center_x = cropped_frame.cols() / 2;
-        let center_y = cropped_frame.rows() / 2;
-        circle(&mut cropped_frame, Point{x: center_x, y: center_y}, 10, VecN([0.0, 255.0, 0.0, 0.0]), FILLED, LINE_8, 0);
+        let center_x = input.cols() / 2;
+        let center_y = input.rows() / 2;
+        circle(&mut input, Point{x: center_x, y: center_y}, 10, VecN([0.0, 255.0, 0.0, 0.0]), FILLED, LINE_8, 0);
 
-        // 5. resize frame to output
+        // 4. resize frame to output
         let mut resized = Mat::default();
-        resize(&cropped_frame, &mut resized, Size{width: frame_state.width as i32, height: frame_state.height as i32}, 0.0, 0.0, INTER_LINEAR);
+        resize(&input, &mut resized, Size{width: frame_state.width as i32, height: frame_state.height as i32}, 0.0, 0.0, INTER_LINEAR);
 
         // 5. convert RGB to RGBA for displaying to canvas
         let mut output = Mat::default();
@@ -139,14 +136,14 @@ pub fn display_camera_feed(
             }
         };
 
-        frame_state.window
+        window
             .emit("grab_camera_frame", encode(data))
             .unwrap();
         
         frame_state.frame_index += 1;
     };
 
-    match camera_stream(label, rx, frame_state, grab_frame) {
+    match camera_stream(label, rx, frame_state, grab_frame, window) {
         Ok(()) => (),
         Err(e) => {
             error!("Could not read frames from camera ({:})", e.to_string());
