@@ -1,12 +1,14 @@
-import { Alert, AlertColor, AppBar, Box, Button, IconButton, Modal, Snackbar, Toolbar, Typography } from "@mui/material";
+import { Alert, AlertColor, AppBar, Box, Button, IconButton, List, ListItem, Modal, Snackbar, Toolbar, Typography } from "@mui/material";
 import SettingsIcon from "@mui/icons-material/Settings";
 import { useEffect, useRef, useState } from "react";
 import SettingsPage from "./SettingsPage";
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
-import { Target } from "./components/Target";
-import { Shot, TARGET_SIZE, TracePoint, updateShot } from "../ShotUtils";
+import { Target, ZoomedTarget } from "./components/Target";
+import { Shot, TARGET_SIZE, TracePoint, genRandomShots, updateShot } from "../ShotUtils";
 import ScoreStatCard from "./components/ScoreStatCard";
 import { invoke } from "@tauri-apps/api/tauri";
+import ShotTable from "./components/ShotTable";
+import LineChart from "./components/LineChart";
 
 var unlistens: UnlistenFn[] = [];
 
@@ -54,6 +56,7 @@ export default function MainPage() {
   const [shootStarted, setShootStarted] = useState(false);
 
   const incrFineAdjust = (x: number, y: number) => {
+      setFineAdjustment([x, y]);
       // TODO: increment fine adjust
       // electron.ipcRenderer.sendMsgOnChannel("camera-render-channel",
       //   { cmd: "INCR_FINE_ADJUST", fineAdjust: {x: x, y: y} });
@@ -61,6 +64,7 @@ export default function MainPage() {
 
   const [calibratePoint, setCalibratePoint] = useState<number[]>([540.0, 440.0]);
   const [fineAdjustment, setFineAdjustment] = useState<number[]>([0.0, 0.0]);
+  const [fineAdjustmentEnd, setFineAdjustmentEnd] = useState<number[]>([0.0, 0.0]);
   const [fineAdjustmentStarted, setFineAdjustmentStarted] = useState(false);
   const [fineAdjustmentStart, setFineAdjustmentStart] = useState<number[]>([0.0, 0.0]);
   const [showAdjustment, setShowAdjustment] = useState(false);
@@ -76,20 +80,20 @@ export default function MainPage() {
     }
 
     setShowAdjustment(true);
-    setFineAdjustment([e.currentTarget.cx.baseVal.value, e.currentTarget.cy.baseVal.value]);
+    setFineAdjustmentEnd([e.currentTarget.cx.baseVal.value, e.currentTarget.cy.baseVal.value]);
     setFineAdjustmentStart([e.currentTarget.cx.baseVal.value, e.currentTarget.cy.baseVal.value]);
     setFineAdjustmentStarted(true);
   };
 
   const handleFineAdjustmentMove = (e: React.MouseEvent<SVGSVGElement>) => {
     if (fineAdjustmentStarted) {
-      setFineAdjustment([e.nativeEvent.offsetX, e.nativeEvent.offsetY]);
+      setFineAdjustmentEnd([e.nativeEvent.offsetX, e.nativeEvent.offsetY]);
     }
   };
 
   const handleFineAdjustmentEnd = (e: React.MouseEvent<SVGSVGElement>) => {
     if (fineAdjustmentStarted) {
-      setFineAdjustment([e.nativeEvent.offsetX, e.nativeEvent.offsetY]);
+      setFineAdjustmentEnd([e.nativeEvent.offsetX, e.nativeEvent.offsetY]);
       setFineAdjustmentStarted(false);
 
       const distX = e.nativeEvent.offsetX - fineAdjustmentStart[0];
@@ -97,8 +101,8 @@ export default function MainPage() {
 
       if (canvasRef.current) {
         incrFineAdjust(
-          2 * distX / canvasRef.current?.width * TARGET_SIZE,
-          2 * distY / canvasRef.current?.height * TARGET_SIZE
+          distX / canvasRef.current?.width * TARGET_SIZE,
+          distY / canvasRef.current?.height * TARGET_SIZE
         );
       }
     }
@@ -122,17 +126,18 @@ export default function MainPage() {
   };
 
   const startShoot = (testState?: {testShotPoint: [number, number], testShots: Shot[], testShotGroups: Shot[][], allTestShots: Shot[] }) => {
+    // start video thread first then audio
     invoke('start_shoot_video', {
       cameraLabel: cameraId,
       calibratePoint: calibratePoint,
       fineAdjust: fineAdjustment,
       minThresh: cameraThreshs[0],
       maxThresh: cameraThreshs[1]
-    });
-
-    invoke('start_shoot_audio', {
-      micLabel: micId,
-      thresh: micThresh,
+    }).then(() => {
+      invoke('start_shoot_audio', {
+        micLabel: micId,
+        thresh: micThresh,
+      });
     });
 
     let currShotPoint = shotPoint;
@@ -154,8 +159,6 @@ export default function MainPage() {
 
     listen('add_before', (event) => {
       let center = event.payload as TracePoint;
-      console.log(event.payload);
-      console.log("add_before called {:}", center.x, center.y);
       setBeforeTrace([center.x, center.y]);
     }).then(unlisten => {
       unlistens.push(unlisten);
@@ -267,7 +270,45 @@ export default function MainPage() {
   };
 
   const testClick = () => {
-    showToast("error", "Test button not implemented");
+    if (calibrateStarted) {
+      showToast("error", "Please wait for calibration to finish");
+      return;
+    }
+
+    if (shootStarted) {
+      showToast("error", "Please wait for previous test to finish");
+      return;
+    }
+
+    const allTestShots = genRandomShots(19);
+    const testShotGroups: Shot[][] = [];
+    let currIdx = 0;
+    while (currIdx + 10 < allTestShots.length) {
+      const shotGroup: Shot[] = [];
+      for (let i = currIdx; i < currIdx + 10; i++) {
+        shotGroup.push(allTestShots[i]);
+      }
+      testShotGroups.push(shotGroup.reverse());
+      currIdx += 10;
+    }
+
+    const testShots: Shot[] = [];
+    for (let i = currIdx; i < allTestShots.length; i++) {
+      testShots.push(allTestShots[i]);
+    }
+
+    const testShotPoint: [number, number] = [
+      allTestShots[allTestShots.length - 1].x,
+      allTestShots[allTestShots.length - 1].y,
+    ];
+    setShotPoint(testShotPoint);
+    setShots(testShots.reverse());
+    setShotGroups(testShotGroups.reverse());
+    setAllShots(allTestShots.reverse());
+    setShot(testShots[testShots.length - 1]);
+
+    startShoot({testShotPoint, testShots, testShotGroups, allTestShots});
+    setShootStarted(true);
   };
 
   const shootClick = () => {
@@ -503,7 +544,7 @@ export default function MainPage() {
               handleFineAdjustmentStart={handleFineAdjustmentStart}
               handleFineAdjustmentMove={handleFineAdjustmentMove}
               handleFineAdjustmentEnd={handleFineAdjustmentEnd}
-              fineAdjustment={fineAdjustment}
+              fineAdjustmentEnd={fineAdjustmentEnd}
               fineAdjustmentStart={fineAdjustmentStart}
               showAdjustment={showAdjustment}
             />
@@ -526,6 +567,63 @@ export default function MainPage() {
               scoreStat={shot ? shot.aim : 0}
               dp={1}
               suffix="s"
+            />
+          </div>
+        </div>
+        <div
+          style={{
+            flex: "0 0 15%",
+            border: "1px solid #D7EC58",
+            borderRadius: "25px",
+            overflow: "hidden",
+          }}
+        >
+          <List>
+            {shotGroups.map((shotGroup, id) => (
+              <ListItem>
+                <ZoomedTarget shots={shotGroup} />
+              </ListItem>
+            ))}
+          </List>
+        </div>
+        <div
+          style={{
+            flex: "0 1 40%",
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              flex: "65%",
+              border: "1px solid #D7EC58",
+              borderRadius: "25px",
+              overflow: "hidden",
+            }}
+          >
+            <ShotTable shots={allShots} />
+          </div>
+          <div
+            style={{
+              flex: "35%",
+              border: "1px solid #D7EC58",
+              borderRadius: "25px",
+            }}
+          >
+            <LineChart
+              lines={data}
+              xMin={-0.5}
+              xMax={0.5}
+              yMin={-40}
+              yMax={40}
+              yAxisLabel="displacement (mm)"
+              xAxisLoc="middle"
+              name="shotplot"
+              xAxisLabel="time (s)"
+              zeroLine
+              hasLegend
             />
           </div>
         </div>

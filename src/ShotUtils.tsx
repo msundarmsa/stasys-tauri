@@ -54,10 +54,10 @@ const updateScoreStats = (beforeTrace: TracePoint[], shot: Shot) => {
     shot.stab = (num10Ring / total10Ring) * 100.0;
 
     // desc time is how long it took you to first enter the 10 ring
-    shot.desc = (entered10RingTime - firstFrameTime) / 1000;
+    shot.desc = entered10RingTime - firstFrameTime;
 
     // aim time is how long it took you to take the shot since first entering the 10 ring
-    shot.aim = (lastFrameTime - entered10RingTime) / 1000;
+    shot.aim = lastFrameTime - entered10RingTime;
   }
 };
 

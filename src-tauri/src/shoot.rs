@@ -222,6 +222,7 @@ pub fn grab_shoot_frames(
                         shot_point: TracePoint,
                         after_trace: Vec<TracePoint>
                     }
+                    info!("Shot finished");
                     window
                         .emit("shot_finished", Payload {
                             before_trace,
@@ -309,25 +310,33 @@ pub fn grab_shoot_frames(
             } else {
                 if frame_state.shot_point.is_none() {
                     if frame_state.trigger_time.is_some() {
-                        // trigger has just been pulled
-                        if frame_state.trigger_time.unwrap() > curr_time {
-                            // trigger was after frame was taken
-                            // add current position to before trace
-                            frame_state.before_trace.push(center);
-                            
-                            window
-                                .emit("add_before", center)
-                                .unwrap();
-                        } else {
-                            // trigger was before frame was taken
-                            // add current position to after trace
-                            frame_state.after_trace.push(center);
+                        // TODO: comment when adding back splines
+                        frame_state.before_trace.push(center);
+                        
+                        window
+                            .emit("add_before", center)
+                            .unwrap();
 
-                            window
-                                .emit("add_after", center)
-                                .unwrap();
-                        }
                         frame_state.shot_point = Some(center);
+                        // TODO: remove comment when adding back splines
+                        // trigger has just been pulled
+                        // if frame_state.trigger_time.unwrap() > curr_time {
+                        //     // trigger was after frame was taken
+                        //     // add current position to before trace
+                        //     frame_state.before_trace.push(center);
+                        //     
+                        //     window
+                        //         .emit("add_before", center)
+                        //         .unwrap();
+                        // } else {
+                        //     // trigger was before frame was taken
+                        //     // add current position to after trace
+                        //     frame_state.after_trace.push(center);
+
+                        //     window
+                        //         .emit("add_after", center)
+                        //         .unwrap();
+                        // }
                     } else {
                         frame_state.before_trace.push(center);
 
@@ -341,26 +350,32 @@ pub fn grab_shoot_frames(
                     } else if frame_state.after_trace.len() == 2 {
                         frame_state.after_trace.push(center);
 
-                        let mut t_x = Vec::new();
-                        let mut t_y = Vec::new();
-                        for i in frame_state.before_trace.len() - 3..frame_state.before_trace.len() {
-                            let time = frame_state.before_trace[i].time;
-                            t_x.push((frame_state.before_trace[i].x, time));
-                            t_y.push((frame_state.before_trace[i].y, time));
-                        }
+                        // TODO: comment when adding back splines
+                        let trigger_time_from_shot_start = frame_state.before_trace.last().unwrap().time;
+                        let interp_x = frame_state.before_trace.last().unwrap().x;
+                        let interp_y = frame_state.before_trace.last().unwrap().y;
 
-                        for i in 0..3 {
-                            let time = frame_state.after_trace[i].time;
-                            t_x.push((frame_state.after_trace[i].x, time));
-                            t_y.push((frame_state.after_trace[i].y, time));
-                        }
+                        // TODO: remove comment when adding back splines
+                        // let mut t_x = Vec::new();
+                        // let mut t_y = Vec::new();
+                        // for i in frame_state.before_trace.len() - 3..frame_state.before_trace.len() {
+                        //     let time = frame_state.before_trace[i].time;
+                        //     t_x.push((frame_state.before_trace[i].x, time));
+                        //     t_y.push((frame_state.before_trace[i].y, time));
+                        // }
 
-                        let sx = Spline::new(t_x, BoundaryCondition::Natural);
-                        let sy = Spline::new(t_y, BoundaryCondition::Natural);
+                        // for i in 0..3 {
+                        //     let time = frame_state.after_trace[i].time;
+                        //     t_x.push((frame_state.after_trace[i].x, time));
+                        //     t_y.push((frame_state.after_trace[i].y, time));
+                        // }
 
-                        let trigger_time_from_shot_start = frame_state.trigger_time.unwrap().duration_since(frame_state.shot_start_time).as_secs_f64();
-                        let interp_x = sx.eval(trigger_time_from_shot_start);
-                        let interp_y = sy.eval(trigger_time_from_shot_start);
+                        // let sx = Spline::new(t_x, BoundaryCondition::Natural);
+                        // let sy = Spline::new(t_y, BoundaryCondition::Natural);
+
+                        // let trigger_time_from_shot_start = frame_state.trigger_time.unwrap().duration_since(frame_state.shot_start_time).as_secs_f64();
+                        // let interp_x = sx.eval(trigger_time_from_shot_start);
+                        // let interp_y = sy.eval(trigger_time_from_shot_start);
 
                         let shot_point = TracePoint {
                             x: interp_x,

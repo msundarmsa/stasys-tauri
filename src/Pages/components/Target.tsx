@@ -68,7 +68,7 @@ export const Target = ({
   handleFineAdjustmentStart,
   handleFineAdjustmentMove,
   handleFineAdjustmentEnd,
-  fineAdjustment,
+  fineAdjustmentEnd: fineAdjustment,
   fineAdjustmentStart,
   showAdjustment,
 }: {
@@ -84,7 +84,7 @@ export const Target = ({
   handleFineAdjustmentStart: (e: React.MouseEvent<SVGCircleElement>) => void;
   handleFineAdjustmentMove: (e: React.MouseEvent<SVGSVGElement>) => void;
   handleFineAdjustmentEnd: (e: React.MouseEvent<SVGSVGElement>) => void;
-  fineAdjustment: number[];
+  fineAdjustmentEnd: number[];
   fineAdjustmentStart: number[];
   showAdjustment: boolean;
 }) => {
