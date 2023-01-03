@@ -18,6 +18,13 @@ use crate::mic::mic_stream;
 static TARGET_SIZE: f64 = 170.0;
 static RATIO1: f64 = 170.0 / 254.0;
 
+#[derive(Serialize, Clone, Copy)]
+pub struct TracePoint {
+    pub x: f64,
+    pub y: f64,
+    pub time: f64, // time since shot start
+}
+
 pub fn detect_circles(frame: &Mat, detector: &mut Ptr<SimpleBlobDetector>) -> Vector<KeyPoint> {
     // if frame is not grayscale, convert it
     let mut gray_frame = Mat::default();
@@ -52,7 +59,7 @@ pub fn crop_frame(frame: &Mat, calibrate_point: [f64; 2]) -> Mat {
     return Mat::roi(frame, Rect::new(x as i32, y as i32, width as i32, height as i32)).unwrap().clone();
 }
 
-pub fn grab_shoot_mic(
+pub fn mic_trigger(
     label: String,
     threshold: f64,
     window: Window,
@@ -112,13 +119,6 @@ pub fn grab_shoot_frames(
     window: Window,
     rx: Receiver<()>,
 ) {
-    #[derive(Serialize, Clone, Copy)]
-    struct TracePoint {
-        x: f64,
-        y: f64,
-        time: f64, // time since shot start
-    }
-
     // define and initialize frame state
     struct FrameState {
         frame_index: u32,
@@ -157,7 +157,7 @@ pub fn grab_shoot_frames(
         trigger_rx
     };
 
-    let grab_frame = |frame: Mat, frame_state: &mut FrameState, window: &Window| {
+    let grab_frame = |frame: Mat, frame_state: &mut FrameState, window: &Window| -> bool {
         let curr_time = Instant::now();
         let time_since_shot_start = match frame_state.frame_index {
             0 => 0.0,
@@ -412,6 +412,8 @@ pub fn grab_shoot_frames(
         }
         
         frame_state.frame_index += 1;
+
+        return true; // continue onto next frame
     };
 
     match camera_stream(label, rx, frame_state, grab_frame, window) {

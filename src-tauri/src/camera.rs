@@ -73,7 +73,7 @@ fn get_camera_input(label: String) -> Result<Input, Error> {
     }
 }
 
-pub fn camera_stream<T>(label: String, rx: Receiver<()>, mut state: T, grab_frame: fn(Mat, &mut T, &Window), window: Window) -> Result<(), Error> {
+pub fn camera_stream<T>(label: String, rx: Receiver<()>, mut state: T, grab_frame: fn(Mat, &mut T, &Window) -> bool, window: Window) -> Result<(), Error> {
     info!("Starting camera {:}", label);
     
     let mut input = match get_camera_input(label) {
@@ -135,7 +135,9 @@ pub fn camera_stream<T>(label: String, rx: Receiver<()>, mut state: T, grab_fram
                     }
                 };
 
-                grab_frame(mat, state_ref, &window);
+                if !grab_frame(mat, state_ref, &window) {
+                    break;
+                }
             }
         }
 

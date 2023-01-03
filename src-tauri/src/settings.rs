@@ -79,12 +79,12 @@ pub fn display_camera_feed(
     params.min_inertia_ratio = 0.85;
     let detector = SimpleBlobDetector::create(params).unwrap();
     let frame_state = FrameState{ frame_index, width, height, rx_threshs, start_time, prev_frame_time, params, detector };
-    let grab_frame = |frame: Mat, frame_state: &mut FrameState, window: &Window| {
+    let grab_frame = |frame: Mat, frame_state: &mut FrameState, window: &Window| -> bool {
         if frame_state.frame_index == 0 {
             info!("Reading frames. Input: {:} x {:}. Output: {:} x {:}", frame.cols(), frame.rows(), frame_state.width, frame_state.height);
         } else if frame_state.prev_frame_time.elapsed().as_secs_f64() < 0.03 {
             // only process at 30fps for output to UI
-            return
+            return true; // continue onto next frame
         }
 
         frame_state.prev_frame_time = Instant::now();
@@ -132,7 +132,7 @@ pub fn display_camera_feed(
             Ok(res) => res,
             Err(error) => {
                 error!("Could not get data bytes from Mat ({:})", error);
-                return;
+                return false; // stop capturing frames
             }
         };
 
@@ -141,6 +141,8 @@ pub fn display_camera_feed(
             .unwrap();
         
         frame_state.frame_index += 1;
+
+        return true; // continue onto next frame
     };
 
     match camera_stream(label, rx, frame_state, grab_frame, window) {

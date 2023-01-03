@@ -9,14 +9,24 @@ import ScoreStatCard from "./components/ScoreStatCard";
 import { invoke } from "@tauri-apps/api/tauri";
 import ShotTable from "./components/ShotTable";
 import LineChart from "./components/LineChart";
+// import doneSound from 'public/sounds/done.mp3';
+// import useSound from 'use-sound';
 
 var unlistens: UnlistenFn[] = [];
+var shootUnlistens: UnlistenFn[] = [];
+var calibUnlistens: UnlistenFn[] = []
 
 export default function MainPage() {
   // settings modal
   const [settingsPageOpen, setSettingsPageOpen] = useState(false);
   const handleSettingsPageOpen = () => setSettingsPageOpen(true);
   const handleSettingsPageClose = () => setSettingsPageOpen(false);
+
+  // calibration snack bar
+  const [calibrationSBOpen, setCalibrationSBOpen] = useState(false);
+  const handleCalibrationSBOpen = () => setCalibrationSBOpen(true);
+  const handleCalibrationSBClose = () => setCalibrationSBOpen(false);
+  const [calibrationError, setCalibrationError] = useState("");
 
   // toasts
   const [toastOpen, setToastOpen] = useState(false);
@@ -50,6 +60,8 @@ export default function MainPage() {
   const [micId, setMicId] = useState("");
   const [micThresh, setMicThresh] = useState(0.2);
   const [cameraThreshs, setCameraThreshs] = useState<number[]>([120, 150]);
+
+  // const [calibrationFinishedSound] = useSound(doneSound);
 
   // buttons
   const [calibrateStarted, setCalibrateStarted] = useState(false);
@@ -125,6 +137,41 @@ export default function MainPage() {
     setPrevAfter(undefined);
   };
 
+  const startCalibrate = () => {
+    // start video thread first then audio
+    invoke('start_calib_video', {
+      cameraLabel: cameraId,
+      minThresh: cameraThreshs[0],
+      maxThresh: cameraThreshs[1]
+    }).then(() => {
+      invoke('start_audio', {
+        micLabel: micId,
+        thresh: micThresh,
+      });
+    });
+
+    listen('calibration_finished', (event) => {
+      let result = event.payload as { success: boolean, calibrate_point: number[], error_msg: string };
+      // calibrationFinishedSound();
+      if (result.success) {
+        setCalibrationError("");
+        setCalibratePoint(result.calibrate_point);
+      } else {
+        setCalibrationError(result.error_msg);
+      }
+      handleCalibrationSBOpen();
+      setCalibrateStarted(false);
+      stopWebcamAndMic();
+    }).then(unlisten => {
+      calibUnlistens.push(unlisten);
+    });
+  }
+
+  const stopCalibrate = () => {
+    // send stop signal to tauri backend
+    invoke('stop_calibrate');
+  };
+
   const startShoot = (testState?: {testShotPoint: [number, number], testShots: Shot[], testShotGroups: Shot[][], allTestShots: Shot[] }) => {
     // start video thread first then audio
     invoke('start_shoot_video', {
@@ -134,7 +181,7 @@ export default function MainPage() {
       minThresh: cameraThreshs[0],
       maxThresh: cameraThreshs[1]
     }).then(() => {
-      invoke('start_shoot_audio', {
+      invoke('start_audio', {
         micLabel: micId,
         thresh: micThresh,
       });
@@ -154,21 +201,21 @@ export default function MainPage() {
     listen('clear_trace', (_) => {
         clearTrace();
     }).then(unlisten => {
-      unlistens.push(unlisten);
+      shootUnlistens.push(unlisten);
     });
 
     listen('add_before', (event) => {
       let center = event.payload as TracePoint;
       setBeforeTrace([center.x, center.y]);
     }).then(unlisten => {
-      unlistens.push(unlisten);
+      shootUnlistens.push(unlisten);
     });
 
     listen('add_after', (event) => {
       let center = event.payload as TracePoint;
       setAfterTrace([center.x, center.y]);
     }).then(unlisten => {
-      unlistens.push(unlisten);
+      shootUnlistens.push(unlisten);
     });
 
     listen('add_shot', (event) => {
@@ -182,7 +229,7 @@ export default function MainPage() {
         setShots(currShots);
       }
     }).then(unlisten => {
-      unlistens.push(unlisten);
+      shootUnlistens.push(unlisten);
     });
 
     listen('shot_finished', (event) => {
@@ -260,13 +307,21 @@ export default function MainPage() {
         setData([xData, yData]);
       }
     }).then(unlisten => {
-      unlistens.push(unlisten);
+      shootUnlistens.push(unlisten);
     });
   };
 
-  const stopShoot = () => {
+  const stopWebcamAndMic = () => {
     // send stop signal to tauri backend
-    invoke('stop_shoot');
+    invoke('stop_webcam_and_mic');
+
+    // stop listening on shoot events
+    shootUnlistens.forEach(unlisten => unlisten());
+    shootUnlistens = [];
+
+    // stop listening on calibrate events
+    calibUnlistens.forEach(unlisten => unlisten());
+    calibUnlistens = [];
   };
 
   const testClick = () => {
@@ -320,7 +375,7 @@ export default function MainPage() {
     setShowAdjustment(false);
 
     if (shootStarted) {
-      stopShoot();
+      stopWebcamAndMic();
       setShootStarted(false);
       clearTrace();
     } else {
@@ -334,7 +389,26 @@ export default function MainPage() {
   };
 
   const calibrateClick = () => {
-    showToast("error", "Calibrate button not implemented");
+    if (shootStarted) {
+      showToast("error", "Please stop shooting before calibrating");
+      return;
+    }
+
+    setShowAdjustment(false);
+
+    if (calibrateStarted) {
+      stopWebcamAndMic();
+      setCalibrateStarted(false);
+      setCalibrationError("Calibration stopped by user");
+      handleCalibrationSBOpen();
+    } else {
+      if (cameraId == "" || micId == "") {
+        showToast("error", "No camera/mic found!");
+        return;
+      }
+      startCalibrate();
+      setCalibrateStarted(true);
+    }
   };
 
   useEffect(() => {
@@ -347,8 +421,7 @@ export default function MainPage() {
 
     return () => {
       // stop running threads
-      stopShoot();
-      // stopCalibrate();
+      stopWebcamAndMic();
 
       // stop listening on events
       unlistens.forEach(unlisten => unlisten());
@@ -628,6 +701,21 @@ export default function MainPage() {
           </div>
         </div>
       </div>
+      <Snackbar
+        open={calibrationSBOpen}
+        autoHideDuration={10000}
+        onClose={handleCalibrationSBClose}
+      >
+        <Alert
+          onClose={handleCalibrationSBClose}
+          severity={calibrationError == "" ? "success" : "error"}
+          sx={{ width: "100%" }}
+        >
+          {calibrationError == ""
+            ? "Calibration finished!"
+            : "Calibration failed: " + calibrationError}
+        </Alert>
+      </Snackbar>
       <Snackbar
         open={toastOpen}
         autoHideDuration={5000}

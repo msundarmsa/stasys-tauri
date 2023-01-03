@@ -24,7 +24,9 @@ use thread::Thread;
 mod settings;
 use settings::{display_camera_feed, display_volume};
 mod shoot;
-use shoot::{grab_shoot_frames, grab_shoot_mic};
+use shoot::{grab_shoot_frames, mic_trigger};
+mod calibrate;
+use calibrate::grab_calib_frames;
 
 struct ManagedAppState(Mutex<AppState>);
 #[derive(Default)]
@@ -36,7 +38,7 @@ struct AppState {
 }
 
 #[tauri::command]
-fn start_shoot_audio(
+fn start_audio(
     mic_label: String,
     thresh: f64,
     window: Window,
@@ -50,15 +52,47 @@ fn start_shoot_audio(
     let (tx, rx) = channel();
 
     // start thread to grab mic 
-    let handle = spawn(move || grab_shoot_mic(
+    let handle = spawn(move || mic_trigger(
         mic_label,
         thresh,
         window,
         curr_trigger_tx,
         rx
     ));
-    let name = "grab_shoot_mic".to_string();
+    let name = "mic_trigger".to_string();
     curr_state.mic_thread = Some(Thread{name, handle, tx});
+
+    // remove lock
+    drop(curr_state);
+}
+
+#[tauri::command]
+fn start_calib_video(
+    camera_label: String,
+    min_thresh: u32,
+    max_thresh: u32,
+    window: Window,
+    state: State<ManagedAppState>,
+) {
+    // lock mutex to get value
+    let mut curr_state = state.0.lock().unwrap();
+
+    // create channels to terminate camera and mic threads and for mic triggers
+    let (tx, rx) = channel();
+    let (trigger_tx, trigger_rx) = channel();
+
+    // start thread to grab camera
+    let handle = spawn(move || grab_calib_frames(
+        camera_label,
+        min_thresh,
+        max_thresh,
+        trigger_rx,
+        window,
+        rx,
+    ));
+    let name = "grab_calib_frames".to_string();
+    curr_state.camera_thread = Some(Thread{name, handle, tx});
+    curr_state.trigger_tx = Some(trigger_tx);
 
     // remove lock
     drop(curr_state);
@@ -102,7 +136,7 @@ fn start_shoot_video(
 }
 
 #[tauri::command]
-fn stop_shoot(state: State<ManagedAppState>) {
+fn stop_webcam_and_mic(state: State<ManagedAppState>) {
     // lock mutex to get value
     let mut curr_state = state.0.lock().unwrap();
     
@@ -239,7 +273,7 @@ fn main() {
 
     tauri::Builder::default()
         .manage(ManagedAppState(Default::default()))
-        .invoke_handler(tauri::generate_handler![settings_choose_camera, settings_close_camera, settings_choose_mic, settings_close_mic, settings_threshs_changed, start_shoot_video, start_shoot_audio, stop_shoot])
+        .invoke_handler(tauri::generate_handler![settings_choose_camera, settings_close_camera, settings_choose_mic, settings_close_mic, settings_threshs_changed, start_shoot_video, start_audio, stop_webcam_and_mic, start_calib_video])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
