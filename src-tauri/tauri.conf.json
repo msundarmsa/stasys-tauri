@@ -54,11 +54,9 @@
     },
     "windows": [
       {
-        "fullscreen": false,
-        "height": 1080,
+        "fullscreen": true,
         "resizable": false,
-        "title": "STASYS",
-        "width": 1920
+        "title": "STASYS"
       }
     ]
   }
