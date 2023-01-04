@@ -260,7 +260,7 @@ pub fn grab_shoot_frames(
                 y,
                 time: curr_time.duration_since(frame_state.shot_start_time).as_secs_f64(),
             };
-            info!("Detected circle (px): {:}, {:}. Position (mm): {:}, {:}", circle.pt.x, circle.pt.y, center.x, center.y);
+            info!("Frame ID: {:}. Detected circle (px): {:}, {:}. Position (mm): {:}, {:}", frame_state.frame_index, circle.pt.x, circle.pt.y, center.x, center.y);
 
             if x >= -TARGET_SIZE / 2.0 &&
                x <= TARGET_SIZE / 2.0 &&

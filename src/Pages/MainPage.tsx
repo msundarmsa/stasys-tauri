@@ -68,13 +68,11 @@ export default function MainPage() {
   const [shootStarted, setShootStarted] = useState(false);
 
   const incrFineAdjust = (x: number, y: number) => {
-      setFineAdjustment([x, y]);
-      // TODO: increment fine adjust
-      // electron.ipcRenderer.sendMsgOnChannel("camera-render-channel",
-      //   { cmd: "INCR_FINE_ADJUST", fineAdjust: {x: x, y: y} });
+      setFineAdjustment([fineAdjustment[0] + x, fineAdjustment[1] + y]);
   }
 
   const [calibratePoint, setCalibratePoint] = useState<number[]>([540.0, 440.0]);
+  // const [calibratePoint, setCalibratePoint] = useState<number[]>([609.0, 385.0]);
   const [fineAdjustment, setFineAdjustment] = useState<number[]>([0.0, 0.0]);
   const [fineAdjustmentEnd, setFineAdjustmentEnd] = useState<number[]>([0.0, 0.0]);
   const [fineAdjustmentStarted, setFineAdjustmentStarted] = useState(false);
@@ -274,7 +272,7 @@ export default function MainPage() {
         let idx = beforeTrace.length - 1;
         while (idx >= 0) {
           const currTP = beforeTrace[idx];
-          if (shotTime - currTP.time > 5) {
+          if (shotTime - currTP.time > 0.5) {
             break;
           }
 
@@ -291,7 +289,7 @@ export default function MainPage() {
         idx = 0;
         while (idx <= afterTrace.length - 1) {
           const currTP = afterTrace[idx];
-          if (currTP.time - shotTime > 5) {
+          if (currTP.time - shotTime > 0.5) {
             break;
           }
 
