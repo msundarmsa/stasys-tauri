@@ -523,6 +523,22 @@ export default function MainPage() {
           <Button color="secondary" onClick={testClick}>
             TEST
           </Button>
+          <Button
+            color={"info"}
+            onClick={calibrateClick}
+            variant={calibrateStarted ? "contained" : "outlined"}
+            style={{ marginRight: "10px" }}
+          >
+            {calibrateStarted ? "CALIBRATING" : "CALIBRATE"}
+          </Button>
+          <Button
+            color={"success"}
+            onClick={shootClick}
+            variant={shootStarted ? "contained" : "outlined"}
+            style={{ marginRight: "10px" }}
+          >
+            {shootStarted ? "SHOOTING" : "SHOOT"}
+          </Button>
           <IconButton
             size="large"
             edge="start"
@@ -560,21 +576,6 @@ export default function MainPage() {
               />
             </Box>
           </Modal>
-          <Button
-            color={"info"}
-            onClick={calibrateClick}
-            variant={calibrateStarted ? "contained" : "outlined"}
-            style={{ marginRight: "10px" }}
-          >
-            {calibrateStarted ? "CALIBRATING" : "CALIBRATE"}
-          </Button>
-          <Button
-            color={"success"}
-            onClick={shootClick}
-            variant={shootStarted ? "contained" : "outlined"}
-          >
-            {shootStarted ? "SHOOTING" : "SHOOT"}
-          </Button>
         </Toolbar>
       </AppBar>
       <div
