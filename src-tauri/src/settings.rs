@@ -2,9 +2,10 @@ extern crate ffmpeg_next as ffmpeg;
 
 use base64::encode;
 use log::{info, error};
-use opencv::core::{Point, VecN, Size, Ptr};
+use opencv::core::{Point, VecN, Size, Ptr, Vector};
 use opencv::features2d::{SimpleBlobDetector, SimpleBlobDetector_Params};
 use opencv::imgproc::{cvt_color, circle, LINE_8, FILLED, resize, INTER_LINEAR};
+use opencv::imgcodecs::imwrite;
 use opencv::prelude::*;
 use tauri::Window;
 use std::sync::mpsc::{Receiver, Sender};
@@ -113,9 +114,9 @@ pub fn display_camera_feed(
             let radius = (keypoint.size / 2.0) as i32;
             circle(&mut input, center, radius, color, FILLED, LINE_8, 0);
         } 
-        let center_x = input.cols() / 2;
-        let center_y = input.rows() / 2;
-        circle(&mut input, Point{x: center_x, y: center_y}, 10, VecN([0.0, 255.0, 0.0, 0.0]), FILLED, LINE_8, 0);
+        // let center_x = input.cols() / 2;
+        // let center_y = input.rows() / 2;
+        // circle(&mut input, Point{x: center_x, y: center_y}, 10, VecN([0.0, 255.0, 0.0, 0.0]), FILLED, LINE_8, 0);
 
         // 4. resize frame to output
         let mut resized = Mat::default();

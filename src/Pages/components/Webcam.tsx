@@ -40,10 +40,10 @@ const Webcam = ({ setCameraId, setCameraThreshs, cameraThreshs, webcams, cameraI
         (c) => c.charCodeAt(0)
       );
       // const { width, height } = canvas.getBoundingClientRect();
-      const width = canvas.offsetWidth;
-      const height = canvas.offsetHeight;
+      const width = canvas.width;
+      const height = canvas.height;
       let myImageData = new ImageData(imageArr, Math.floor(width), Math.floor(height));
-      ctx.putImageData(myImageData, 0, 0);
+      ctx.putImageData(myImageData, 0, 0, 0, 0, width, height);
     });
   }
 
@@ -88,7 +88,9 @@ const Webcam = ({ setCameraId, setCameraThreshs, cameraThreshs, webcams, cameraI
 
     // send start signal to tauri backend
     if (canvasRef.current !== null) {
-      const { width, height } = canvasRef.current.getBoundingClientRect();
+      // const { width, height } = canvasRef.current.getBoundingClientRect();
+      const width = canvasRef.current.width;
+      const height = canvasRef.current.height;
       let args = {
         label: device_label,
         width: Math.floor(width),
