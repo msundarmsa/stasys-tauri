@@ -71,8 +71,9 @@ export default function MainPage() {
       setFineAdjustment([fineAdjustment[0] + x, fineAdjustment[1] + y]);
   }
 
-  const [calibratePoint, setCalibratePoint] = useState<number[]>([540.0, 440.0]);
+  // const [calibratePoint, setCalibratePoint] = useState<number[]>([540.0, 440.0]);
   // const [calibratePoint, setCalibratePoint] = useState<number[]>([609.0, 385.0]);
+  const [calibratePoint, setCalibratePoint] = useState<number[]>([0.0, 0.0]);
   const [fineAdjustment, setFineAdjustment] = useState<number[]>([0.0, 0.0]);
   const [fineAdjustmentEnd, setFineAdjustmentEnd] = useState<number[]>([0.0, 0.0]);
   const [fineAdjustmentStarted, setFineAdjustmentStarted] = useState(false);
@@ -111,8 +112,8 @@ export default function MainPage() {
 
       if (canvasRef.current) {
         incrFineAdjust(
-          distX / canvasRef.current?.width * TARGET_SIZE,
-          distY / canvasRef.current?.height * TARGET_SIZE
+          distX / canvasRef.current?.offsetWidth * TARGET_SIZE,
+          distY / canvasRef.current?.offsetHeight * TARGET_SIZE
         );
       }
     }
@@ -572,6 +573,8 @@ export default function MainPage() {
                 micThresh={micThresh}
                 webcams={webcams}
                 mics={mics}
+                cameraId={cameraId}
+                micId={micId}
                 handleClose={handleSettingsPageClose}
               />
             </Box>

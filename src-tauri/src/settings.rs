@@ -20,8 +20,6 @@ pub fn display_volume(
     rx: Receiver<()>
 ) {
     let grab_frame = |volume: f64, _threshold: f64, _trigger_tx: Option<&Sender<Instant>>, _last_trigger: &mut Option<Instant>, window: &Window| {
-        info!("Received audio frame: {:}", volume);
-
         window
             .emit("grab_mic_frame", volume)
             .unwrap();
@@ -80,9 +78,7 @@ pub fn display_camera_feed(
     let detector = SimpleBlobDetector::create(params).unwrap();
     let frame_state = FrameState{ frame_index, width, height, rx_threshs, start_time, prev_frame_time, params, detector };
     let grab_frame = |frame: Mat, frame_state: &mut FrameState, window: &Window| -> bool {
-        if frame_state.frame_index == 0 {
-            info!("Reading frames. Input: {:} x {:}. Output: {:} x {:}", frame.cols(), frame.rows(), frame_state.width, frame_state.height);
-        } else if frame_state.prev_frame_time.elapsed().as_secs_f64() < 0.03 {
+        if frame_state.prev_frame_time.elapsed().as_secs_f64() < 0.03 {
             // only process at 30fps for output to UI
             return true; // continue onto next frame
         }

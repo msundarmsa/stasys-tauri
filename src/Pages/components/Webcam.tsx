@@ -6,7 +6,7 @@ import { open } from '@tauri-apps/api/dialog';
 
 var unlisten: UnlistenFn | null = null;
 
-const Webcam = ({ setCameraId, setCameraThreshs, cameraThreshs, webcams }: IProps) => {
+const Webcam = ({ setCameraId, setCameraThreshs, cameraThreshs, webcams, cameraId }: IProps) => {
   // menu
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const webcamsOpened = Boolean(anchorEl);
@@ -39,7 +39,9 @@ const Webcam = ({ setCameraId, setCameraThreshs, cameraThreshs, webcams }: IProp
         atob(event.payload as string),
         (c) => c.charCodeAt(0)
       );
-      const { width, height } = canvas.getBoundingClientRect();
+      // const { width, height } = canvas.getBoundingClientRect();
+      const width = canvas.offsetWidth;
+      const height = canvas.offsetHeight;
       let myImageData = new ImageData(imageArr, Math.floor(width), Math.floor(height));
       ctx.putImageData(myImageData, 0, 0);
     });
@@ -47,6 +49,7 @@ const Webcam = ({ setCameraId, setCameraThreshs, cameraThreshs, webcams }: IProp
 
   useEffect(() => {
     grabFrames();
+    selectWebcam(cameraId, cameraId.includes("/") || cameraId.includes("\\"));
 
     // stop webcam when element is destroyed
     return () => {
@@ -226,6 +229,7 @@ interface IProps {
   setCameraThreshs: (threshs: number[]) => void;
   cameraThreshs: number[];
   webcams: string[];
+  cameraId: string;
 }
 
 export default Webcam;

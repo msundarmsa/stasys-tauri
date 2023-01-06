@@ -11,6 +11,8 @@ const SettingsPage = ({
   micThresh,
   webcams,
   mics,
+  cameraId,
+  micId,
   handleClose
 }: IProps) => {
   return (
@@ -27,10 +29,10 @@ const SettingsPage = ({
         }}
       >
         <Box sx={{ width: "50%", p: 1 }}>
-          <Mic setMicId={setMicId} setMicThresh={setMicThresh} micThresh={micThresh} mics={mics} />
+          <Mic setMicId={setMicId} setMicThresh={setMicThresh} micThresh={micThresh} mics={mics} micId={micId}/>
         </Box>
         <Box sx={{ width: "50%", p: 1 }}>
-          <Webcam setCameraId={setCameraId} setCameraThreshs={setCameraThreshs} cameraThreshs={cameraThreshs} webcams={webcams} /> 
+          <Webcam setCameraId={setCameraId} setCameraThreshs={setCameraThreshs} cameraThreshs={cameraThreshs} webcams={webcams} cameraId={cameraId} /> 
         </Box>
       </Box>
       <Box textAlign='center'>
@@ -51,6 +53,8 @@ interface IProps {
   micThresh: number;
   webcams: string[];
   mics: string[];
+  cameraId: string;
+  micId: string;
   handleClose: () => void;
 }
 

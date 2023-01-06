@@ -166,7 +166,6 @@ pub fn grab_shoot_frames(
 
         match frame_state.trigger_rx.try_recv() {
             Ok(trigger_time) => {
-                info!("Received trigger");
                 frame_state.trigger_time = Some(trigger_time);
             }
             Err(_) => {}
@@ -222,7 +221,6 @@ pub fn grab_shoot_frames(
                         shot_point: TracePoint,
                         after_trace: Vec<TracePoint>
                     }
-                    info!("Shot finished");
                     window
                         .emit("shot_finished", Payload {
                             before_trace,
@@ -260,7 +258,6 @@ pub fn grab_shoot_frames(
                 y,
                 time: curr_time.duration_since(frame_state.shot_start_time).as_secs_f64(),
             };
-            info!("Frame ID: {:}. Detected circle (px): {:}, {:}. Position (mm): {:}, {:}", frame_state.frame_index, circle.pt.x, circle.pt.y, center.x, center.y);
 
             if x >= -TARGET_SIZE / 2.0 &&
                x <= TARGET_SIZE / 2.0 &&

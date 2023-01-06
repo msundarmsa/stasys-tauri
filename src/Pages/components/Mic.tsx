@@ -14,7 +14,7 @@ import { listen, UnlistenFn } from '@tauri-apps/api/event';
 
 var unlisten: UnlistenFn | null = null;
 
-const Mic = ({ setMicId, setMicThresh, micThresh, mics }: IProps) => {
+const Mic = ({ setMicId, setMicThresh, micThresh, mics, micId }: IProps) => {
   // menu
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
@@ -57,6 +57,7 @@ const Mic = ({ setMicId, setMicThresh, micThresh, mics }: IProps) => {
 
   useEffect(() => {
     grabFrames();
+    selectMic(micId);
 
     // stop mic when element is destroyed
     return () => {
@@ -190,6 +191,7 @@ interface IProps {
   setMicThresh: (thresh: number) => void;
   micThresh: number;
   mics: string[];
+  micId: string;
 }
 
 export default Mic;
