@@ -99,8 +99,8 @@ export const Target = ({
     point: [number, number],
     canvas: HTMLCanvasElement
   ): [number, number] => {
-    const newX = (translateX(point[0]) / 100) * canvas.offsetWidth;
-    const newY = (translateY(point[1]) / 100) * canvas.offsetHeight;
+    const newX = (translateX(point[0]) / 100) * canvas.width;
+    const newY = (translateY(point[1]) / 100) * canvas.height;
 
     return [newX, newY];
   };
