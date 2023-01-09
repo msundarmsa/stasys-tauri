@@ -68,6 +68,7 @@ pub fn mic_trigger(
 ) {
     let grab_frame = |volume: f64, threshold: f64, trigger_tx: Option<&Sender<Instant>>, last_trigger: &mut Option<Instant>, _window: &Window| {
         let now = Instant::now();
+        info!("Mic volume: {:}", volume);
 
         // trigger is locked for 5s after last trigger
         let trigger_locked = last_trigger.is_some() && now.duration_since(last_trigger.unwrap()).as_secs_f64() <= 5.0;

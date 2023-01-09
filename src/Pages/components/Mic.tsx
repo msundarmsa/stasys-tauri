@@ -165,6 +165,7 @@ const Mic = ({ setMicId, setMicThresh, micThresh, mics, micId }: IProps) => {
           refLevel={micThresh}
           name="micplot"
           aspectRatio="1280/720"
+          yMax={2}
         />
       </Box>
       <Stack spacing={2} direction="row" sx={{ mb: 1 }} alignItems="center">
@@ -175,7 +176,7 @@ const Mic = ({ setMicId, setMicThresh, micThresh, mics, micId }: IProps) => {
           value={micThresh}
           step={0.001}
           min={0}
-          max={1}
+          max={2}
           onChange={(_1, newLevel, _2) => {
             // @ts-expect-error: expect error here due to possibility that newLevel be an array
             setMicThresh(newLevel);
