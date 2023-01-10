@@ -110,6 +110,8 @@ pub fn grab_calib_frames(
             }
             Err(_) => {}
         }
+        let trigger_time = frame_state.trigger_time;
+        frame_state.trigger_time = None;
 
         let keypoints = detect_circles(&frame, &mut frame_state.detector);
         let detected_circle = keypoints.len() == 1;
@@ -152,7 +154,7 @@ pub fn grab_calib_frames(
             time: time_since_shot_start,
         });
 
-        if frame_state.trigger_time.is_some() {
+        if trigger_time.is_some() {
             // received trigger
             let calibrate_point = calibrate(&frame_state.before_trace);
             if calibrate_point.is_some() {
@@ -175,7 +177,6 @@ pub fn grab_calib_frames(
                     .unwrap();
             }
 
-            frame_state.trigger_time = None;
             return false; // stop grabbing frames
         }
         
